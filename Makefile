@@ -36,6 +36,7 @@ doc: docs/docs.go
 .PHONY: clean
 clean:
 	rm -f bin/zot*
+	rm -rf /tmp/zot
 
 .PHONY: run
 run: binary test
