@@ -20,7 +20,7 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 		panic("insufficient config")
 	}
 	baseURL := fmt.Sprintf("http://%s:%s", config.Address, config.Port)
-  namespace := fmt.Sprintf("/v2/%s/", config.Namespace)
+  prefix := fmt.Sprintf("/v2/%s/", config.Namespace)
 
 	fmt.Println("------------------------------")
 	fmt.Println("Checking for v1.0.0 compliance")
@@ -69,17 +69,17 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 		Convey("Get images in a repository", func() {
 			Print("\nGet images in a repository")
 			// non-existent repository should fail
-			resp, err := resty.R().Get(baseURL + namespace + "tags/list")
+			resp, err := resty.R().Get(baseURL + prefix + "tags/list")
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 404)
 			So(resp.String(), ShouldNotBeEmpty)
 
 			// after newly created upload should succeed
-			resp, err = resty.R().Post(baseURL + namespace + "blobs/uploads/")
+			resp, err = resty.R().Post(baseURL + prefix + "blobs/uploads/")
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 202)
 
-			resp, err = resty.R().Get(baseURL + namespace + "tags/list")
+			resp, err = resty.R().Get(baseURL + prefix + "tags/list")
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 200)
 			So(resp.String(), ShouldNotBeEmpty)
@@ -87,7 +87,7 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 
 		Convey("Monolithic blob upload", func() {
 			Print("\nMonolithic blob upload")
-			resp, err := resty.R().Post(baseURL + namespace + "blobs/uploads/")
+			resp, err := resty.R().Post(baseURL + prefix + "blobs/uploads/")
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 202)
 			loc := resp.Header().Get("Location")
@@ -97,7 +97,7 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 204)
 
-			resp, err = resty.R().Get(baseURL + namespace + "tags/list")
+			resp, err = resty.R().Get(baseURL + prefix + "tags/list")
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 200)
 			So(resp.String(), ShouldNotBeEmpty)
@@ -139,7 +139,7 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 
 		Convey("Monolithic blob upload with multiple name components", func() {
 			Print("\nMonolithic blob upload with multiple name components")
-			resp, err := resty.R().Post(baseURL + namespace + "1/repo2/repo3/blobs/uploads/")
+			resp, err := resty.R().Post(baseURL + prefix + "1/repo2/repo3/blobs/uploads/")
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 202)
 			loc := resp.Header().Get("Location")
@@ -149,7 +149,7 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 204)
 
-			resp, err = resty.R().Get(baseURL + namespace + "1/repo2/repo3/tags/list")
+			resp, err = resty.R().Get(baseURL + prefix + "1/repo2/repo3/tags/list")
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 200)
 			So(resp.String(), ShouldNotBeEmpty)
@@ -191,7 +191,7 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 
 		Convey("Chunked blob upload", func() {
 			Print("\nChunked blob upload")
-			resp, err := resty.R().Post(baseURL + namespace + "blobs/uploads/")
+			resp, err := resty.R().Post(baseURL + prefix + "blobs/uploads/")
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 202)
 			loc := resp.Header().Get("Location")
@@ -259,7 +259,7 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 
 		Convey("Chunked blob upload with multiple name components", func() {
 			Print("\nChunked blob upload with multiple name components")
-			resp, err := resty.R().Post(baseURL + namespace + "4/repo5/repo6/blobs/uploads/")
+			resp, err := resty.R().Post(baseURL + prefix + "4/repo5/repo6/blobs/uploads/")
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 202)
 			loc := resp.Header().Get("Location")
@@ -328,7 +328,7 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 		Convey("Create and delete uploads", func() {
 			Print("\nCreate and delete uploads")
 			// create a upload
-			resp, err := resty.R().Post(baseURL + namespace + "blobs/uploads/")
+			resp, err := resty.R().Post(baseURL + prefix + "blobs/uploads/")
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 202)
 			loc := resp.Header().Get("Location")
@@ -343,7 +343,7 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 		Convey("Create and delete blobs", func() {
 			Print("\nCreate and delete blobs")
 			// create a upload
-			resp, err := resty.R().Post(baseURL + namespace + "blobs/uploads/")
+			resp, err := resty.R().Post(baseURL + prefix + "blobs/uploads/")
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 202)
 			loc := resp.Header().Get("Location")
@@ -371,7 +371,7 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 		Convey("Manifests", func() {
 			Print("\nManifests")
 			// create a blob/layer
-			resp, err := resty.R().Post(baseURL + namespace + "blobs/uploads/")
+			resp, err := resty.R().Post(baseURL + prefix + "blobs/uploads/")
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 202)
 			loc := resp.Header().Get("Location")
@@ -400,7 +400,7 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 			digest = godigest.FromBytes(content)
 			So(digest, ShouldNotBeNil)
 			resp, err = resty.R().SetHeader("Content-Type", "application/vnd.oci.image.manifest.v1+json").
-				SetBody(content).Put(baseURL + namespace + "manifests/test:1.0")
+				SetBody(content).Put(baseURL + prefix + "manifests/test:1.0")
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 201)
 			d := resp.Header().Get(api.DistContentDigestKey)
@@ -408,44 +408,44 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 			So(d, ShouldEqual, digest.String())
 
 			// check/get by tag
-			resp, err = resty.R().Head(baseURL + namespace + "manifests/test:1.0")
+			resp, err = resty.R().Head(baseURL + prefix + "manifests/test:1.0")
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 200)
-			resp, err = resty.R().Get(baseURL + namespace + "manifests/test:1.0")
+			resp, err = resty.R().Get(baseURL + prefix + "manifests/test:1.0")
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 200)
 			So(resp.Body(), ShouldNotBeEmpty)
 			// check/get by reference
-			resp, err = resty.R().Head(baseURL + namespace + "manifests/" + digest.String())
+			resp, err = resty.R().Head(baseURL + prefix + "manifests/" + digest.String())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 200)
-			resp, err = resty.R().Get(baseURL + namespace + "manifests/" + digest.String())
+			resp, err = resty.R().Get(baseURL + prefix + "manifests/" + digest.String())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 200)
 			So(resp.Body(), ShouldNotBeEmpty)
 
 			// delete manifest
-			resp, err = resty.R().Delete(baseURL + namespace + "manifests/test:1.0")
+			resp, err = resty.R().Delete(baseURL + prefix + "manifests/test:1.0")
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 200)
 			// delete again should fail
-			resp, err = resty.R().Delete(baseURL + namespace + "manifests/" + digest.String())
+			resp, err = resty.R().Delete(baseURL + prefix + "manifests/" + digest.String())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 404)
 
 			// check/get by tag
-			resp, err = resty.R().Head(baseURL + namespace + "manifests/test:1.0")
+			resp, err = resty.R().Head(baseURL + prefix + "manifests/test:1.0")
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 404)
-			resp, err = resty.R().Get(baseURL + namespace + "manifests/test:1.0")
+			resp, err = resty.R().Get(baseURL + prefix + "manifests/test:1.0")
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 404)
 			So(resp.Body(), ShouldNotBeEmpty)
 			// check/get by reference
-			resp, err = resty.R().Head(baseURL + namespace + "manifests/" + digest.String())
+			resp, err = resty.R().Head(baseURL + prefix + "manifests/" + digest.String())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 404)
-			resp, err = resty.R().Get(baseURL + namespace + "manifests/" + digest.String())
+			resp, err = resty.R().Get(baseURL + prefix + "manifests/" + digest.String())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 404)
 			So(resp.Body(), ShouldNotBeEmpty)
