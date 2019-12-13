@@ -17,10 +17,11 @@ import (
 const (
 	Address = "127.0.0.1"
 	Port    = "8080"
+  Namespace = "repo"
 )
 
 func TestWorkflows(t *testing.T) {
-	v1_0_0.CheckWorkflows(t, &compliance.Config{Address: Address, Port: Port})
+  v1_0_0.CheckWorkflows(t, &compliance.Config{Address: Address, Port: Port, Namespace: Namespace})
 }
 
 func TestMain(m *testing.M) {

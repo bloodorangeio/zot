@@ -16,7 +16,7 @@ import (
 )
 
 func CheckWorkflows(t *testing.T, config *compliance.Config) {
-	if config == nil || config.Address == "" || config.Port == "" {
+	if config == nil || config.Address == "" || config.Port == "" || config.Namespace == "" {
 		panic("insufficient config")
 	}
 	baseURL := fmt.Sprintf("http://%s:%s", config.Address, config.Port)
