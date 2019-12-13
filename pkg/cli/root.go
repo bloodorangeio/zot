@@ -109,6 +109,8 @@ func NewRootCmd() *cobra.Command {
 	if err := complianceCmd.MarkFlagRequired("address"); err != nil {
 		panic(err)
 	}
+	complianceCmd.Flags().StringVarP(&complianceConfig.Namespace, "namespace", "N", "",
+		"Namespace to test")
 	complianceCmd.Flags().StringVarP(&complianceConfig.Port, "port", "P", "",
 		"Registry server port")
 	if err := complianceCmd.MarkFlagRequired("port"); err != nil {
