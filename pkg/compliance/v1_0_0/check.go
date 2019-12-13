@@ -19,7 +19,7 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 	if config == nil || config.Address == "" || config.Port == "" || config.Namespace == "" {
 		panic("insufficient config")
 	}
-	baseURL := fmt.Sprintf("http://%s:%s", config.Address, config.Port)
+	baseURL := fmt.Sprintf("https://%s:%s", config.Address, config.Port)
   prefix := fmt.Sprintf("/v2/%s/", config.Namespace)
 
 	fmt.Println("------------------------------")
@@ -30,6 +30,7 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 		Convey("Check version", func() {
 			Print("\nCheck version")
 			resp, err := resty.R().Get(baseURL + "/v2/")
+      Printf("\nResponse body: %v\nResponse Header: %v\n", resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 200)
 		})
@@ -37,6 +38,7 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 		Convey("Get repository catalog", func() {
 			Print("\nGet repository catalog")
 			resp, err := resty.R().Get(baseURL + "/v2/_catalog")
+      Printf("\nResponse body: %v\nResponse Header: %v\n", resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 200)
 			So(resp.String(), ShouldNotBeEmpty)
@@ -48,15 +50,18 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 
 			// after newly created upload should succeed
 			resp, err = resty.R().Post(baseURL + "/v2/z/blobs/uploads/")
+      Printf("\nResponse body: %v\nResponse Header: %v\n", resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 202)
 
 			// after newly created upload should succeed
 			resp, err = resty.R().Post(baseURL + "/v2/a/b/c/d/blobs/uploads/")
+      Printf("\nResponse body: %v\nResponse Header: %v\n", resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 202)
 
 			resp, err = resty.R().SetResult(&api.RepositoryList{}).Get(baseURL + "/v2/_catalog")
+      Printf("\nResponse body: %v\nResponse Header: %v\n", resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 200)
 			So(resp.String(), ShouldNotBeEmpty)
@@ -70,16 +75,19 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 			Print("\nGet images in a repository")
 			// non-existent repository should fail
 			resp, err := resty.R().Get(baseURL + prefix + "tags/list")
+      Printf("\nResponse body: %v\nResponse Header: %v\n", resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 404)
 			So(resp.String(), ShouldNotBeEmpty)
 
 			// after newly created upload should succeed
 			resp, err = resty.R().Post(baseURL + prefix + "blobs/uploads/")
+      Printf("\nResponse body: %v\nResponse Header: %v\n", resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 202)
 
 			resp, err = resty.R().Get(baseURL + prefix + "tags/list")
+      Printf("\nResponse body: %v\nResponse Header: %v\n", resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 200)
 			So(resp.String(), ShouldNotBeEmpty)
@@ -88,16 +96,19 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 		Convey("Monolithic blob upload", func() {
 			Print("\nMonolithic blob upload")
 			resp, err := resty.R().Post(baseURL + prefix + "blobs/uploads/")
+      Printf("\nResponse body: %v\nResponse Header: %v\n", resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 202)
 			loc := resp.Header().Get("Location")
 			So(loc, ShouldNotBeEmpty)
 
 			resp, err = resty.R().Get(baseURL + loc)
+      Printf("\nResponse body: %v\nResponse Header: %v\n", resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 204)
 
 			resp, err = resty.R().Get(baseURL + prefix + "tags/list")
+      Printf("\nResponse body: %v\nResponse Header: %v\n", resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 200)
 			So(resp.String(), ShouldNotBeEmpty)
@@ -107,20 +118,24 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 			digest := godigest.FromBytes(content)
 			So(digest, ShouldNotBeNil)
 			resp, err = resty.R().Put(baseURL + loc)
+      Printf("\nResponse body: %v\nResponse Header: %v\n", resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 400)
 			// without the Content-Length should fail
 			resp, err = resty.R().SetQueryParam("digest", digest.String()).Put(baseURL + loc)
+      Printf("\nResponse body: %v\nResponse Header: %v\n", resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 400)
 			// without any data to send, should fail
 			resp, err = resty.R().SetQueryParam("digest", digest.String()).
 				SetHeader("Content-Type", "application/octet-stream").Put(baseURL + loc)
+      Printf("\nResponse body: %v\nResponse Header: %v\n", resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 400)
 			// monolithic blob upload: success
 			resp, err = resty.R().SetQueryParam("digest", digest.String()).
 				SetHeader("Content-Type", "application/octet-stream").SetBody(content).Put(baseURL + loc)
+      Printf("\nResponse body: %v\nResponse Header: %v\n", resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 201)
 			blobLoc := resp.Header().Get("Location")
@@ -129,10 +144,12 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 			So(resp.Header().Get(api.DistContentDigestKey), ShouldNotBeEmpty)
 			// upload reference should now be removed
 			resp, err = resty.R().Get(baseURL + loc)
+      Printf("\nResponse body: %v\nResponse Header: %v\n", resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 404)
 			// blob reference should be accessible
 			resp, err = resty.R().Get(baseURL + blobLoc)
+      Printf("\nResponse body: %v\nResponse Header: %v\n", resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 200)
 		})
@@ -140,16 +157,19 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 		Convey("Monolithic blob upload with multiple name components", func() {
 			Print("\nMonolithic blob upload with multiple name components")
 			resp, err := resty.R().Post(baseURL + prefix + "1/repo2/repo3/blobs/uploads/")
+      Printf("\nResponse body: %v\nResponse Header: %v\n", resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 202)
 			loc := resp.Header().Get("Location")
 			So(loc, ShouldNotBeEmpty)
 
 			resp, err = resty.R().Get(baseURL + loc)
+      Printf("\nResponse body: %v\nResponse Header: %v\n", resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 204)
 
 			resp, err = resty.R().Get(baseURL + prefix + "1/repo2/repo3/tags/list")
+      Printf("\nResponse body: %v\nResponse Header: %v\n", resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 200)
 			So(resp.String(), ShouldNotBeEmpty)
@@ -159,20 +179,24 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 			digest := godigest.FromBytes(content)
 			So(digest, ShouldNotBeNil)
 			resp, err = resty.R().Put(baseURL + loc)
+      Printf("\nResponse body: %v\nResponse Header: %v\n", resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 400)
 			// without the Content-Length should fail
 			resp, err = resty.R().SetQueryParam("digest", digest.String()).Put(baseURL + loc)
+      Printf("\nResponse body: %v\nResponse Header: %v\n", resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 400)
 			// without any data to send, should fail
 			resp, err = resty.R().SetQueryParam("digest", digest.String()).
 				SetHeader("Content-Type", "application/octet-stream").Put(baseURL + loc)
+      Printf("\nResponse body: %v\nResponse Header: %v\n", resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 400)
 			// monolithic blob upload: success
 			resp, err = resty.R().SetQueryParam("digest", digest.String()).
 				SetHeader("Content-Type", "application/octet-stream").SetBody(content).Put(baseURL + loc)
+      Printf("\nResponse body: %v\nResponse Header: %v\n", resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 201)
 			blobLoc := resp.Header().Get("Location")
@@ -181,10 +205,12 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 			So(resp.Header().Get(api.DistContentDigestKey), ShouldNotBeEmpty)
 			// upload reference should now be removed
 			resp, err = resty.R().Get(baseURL + loc)
+      Printf("\nResponse body: %v\nResponse Header: %v\n", resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 404)
 			// blob reference should be accessible
 			resp, err = resty.R().Get(baseURL + blobLoc)
+      Printf("\nResponse body: %v\nResponse Header: %v\n", resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 200)
 		})
@@ -192,6 +218,7 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 		Convey("Chunked blob upload", func() {
 			Print("\nChunked blob upload")
 			resp, err := resty.R().Post(baseURL + prefix + "blobs/uploads/")
+      Printf("\nResponse body: %v\nResponse Header: %v\n", resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 202)
 			loc := resp.Header().Get("Location")
@@ -207,11 +234,13 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 			contentRange := fmt.Sprintf("%d-%d", 0, len(chunk1))
 			resp, err = resty.R().SetHeader("Content-Type", "application/octet-stream").
 				SetHeader("Content-Range", contentRange).SetBody(chunk1).Patch(baseURL + loc)
+      Printf("\nResponse body: %v\nResponse Header: %v\n", resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 202)
 
 			// check progress
 			resp, err = resty.R().Get(baseURL + loc)
+      Printf("\nResponse body: %v\nResponse Header: %v\n", resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 204)
 			r := resp.Header().Get("Range")
@@ -222,6 +251,7 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 			contentRange = fmt.Sprintf("%d-%d", 0, len(chunk1))
 			resp, err = resty.R().SetHeader("Content-Type", "application/octet-stream").
 				SetHeader("Content-Range", contentRange).SetBody(chunk1).Patch(baseURL + loc)
+      Printf("\nResponse body: %v\nResponse Header: %v\n", resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 400)
 			So(resp.String(), ShouldNotBeEmpty)
@@ -239,6 +269,7 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 			resp, err = resty.R().SetQueryParam("digest", digest.String()).
 				SetHeader("Content-Range", contentRange).
 				SetHeader("Content-Type", "application/octet-stream").SetBody(chunk2).Put(baseURL + loc)
+      Printf("\nResponse body: %v\nResponse Header: %v\n", resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 201)
 			blobLoc := resp.Header().Get("Location")
@@ -249,10 +280,12 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 			So(resp.Header().Get(api.DistContentDigestKey), ShouldNotBeEmpty)
 			// upload reference should now be removed
 			resp, err = resty.R().Get(baseURL + loc)
+      Printf("\nResponse body: %v\nResponse Header: %v\n", resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 404)
 			// blob reference should be accessible
 			resp, err = resty.R().Get(baseURL + blobLoc)
+      Printf("\nResponse body: %v\nResponse Header: %v\n", resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 200)
 		})
@@ -260,6 +293,7 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 		Convey("Chunked blob upload with multiple name components", func() {
 			Print("\nChunked blob upload with multiple name components")
 			resp, err := resty.R().Post(baseURL + prefix + "4/repo5/repo6/blobs/uploads/")
+      Printf("\nResponse body: %v\nResponse Header: %v\n", resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 202)
 			loc := resp.Header().Get("Location")
@@ -275,11 +309,13 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 			contentRange := fmt.Sprintf("%d-%d", 0, len(chunk1))
 			resp, err = resty.R().SetHeader("Content-Type", "application/octet-stream").
 				SetHeader("Content-Range", contentRange).SetBody(chunk1).Patch(baseURL + loc)
+      Printf("\nResponse body: %v\nResponse Header: %v\n", resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 202)
 
 			// check progress
 			resp, err = resty.R().Get(baseURL + loc)
+      Printf("\nResponse body: %v\nResponse Header: %v\n", resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 204)
 			r := resp.Header().Get("Range")
@@ -290,6 +326,7 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 			contentRange = fmt.Sprintf("%d-%d", 0, len(chunk1))
 			resp, err = resty.R().SetHeader("Content-Type", "application/octet-stream").
 				SetHeader("Content-Range", contentRange).SetBody(chunk1).Patch(baseURL + loc)
+      Printf("\nResponse body: %v\nResponse Header: %v\n", resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 400)
 			So(resp.String(), ShouldNotBeEmpty)
@@ -307,6 +344,7 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 			resp, err = resty.R().SetQueryParam("digest", digest.String()).
 				SetHeader("Content-Range", contentRange).
 				SetHeader("Content-Type", "application/octet-stream").SetBody(chunk2).Put(baseURL + loc)
+      Printf("\nResponse body: %v\nResponse Header: %v\n", resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 201)
 			blobLoc := resp.Header().Get("Location")
@@ -317,10 +355,12 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 			So(resp.Header().Get(api.DistContentDigestKey), ShouldNotBeEmpty)
 			// upload reference should now be removed
 			resp, err = resty.R().Get(baseURL + loc)
+      Printf("\nResponse body: %v\nResponse Header: %v\n", resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 404)
 			// blob reference should be accessible
 			resp, err = resty.R().Get(baseURL + blobLoc)
+      Printf("\nResponse body: %v\nResponse Header: %v\n", resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 200)
 		})
@@ -329,6 +369,7 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 			Print("\nCreate and delete uploads")
 			// create a upload
 			resp, err := resty.R().Post(baseURL + prefix + "blobs/uploads/")
+      Printf("\nResponse body: %v\nResponse Header: %v\n", resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 202)
 			loc := resp.Header().Get("Location")
@@ -336,6 +377,7 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 
 			// delete this upload
 			resp, err = resty.R().Delete(baseURL + loc)
+      Printf("\nResponse body: %v\nResponse Header: %v\n", resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 200)
 		})
@@ -344,6 +386,7 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 			Print("\nCreate and delete blobs")
 			// create a upload
 			resp, err := resty.R().Post(baseURL + prefix + "blobs/uploads/")
+      Printf("\nResponse body: %v\nResponse Header: %v\n", resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 202)
 			loc := resp.Header().Get("Location")
@@ -355,6 +398,7 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 			// monolithic blob upload
 			resp, err = resty.R().SetQueryParam("digest", digest.String()).
 				SetHeader("Content-Type", "application/octet-stream").SetBody(content).Put(baseURL + loc)
+      Printf("\nResponse body: %v\nResponse Header: %v\n", resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 201)
 			blobLoc := resp.Header().Get("Location")
@@ -363,6 +407,7 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 
 			// delete this blob
 			resp, err = resty.R().Delete(baseURL + blobLoc)
+      Printf("\nResponse body: %v\nResponse Header: %v\n", resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 202)
 			So(resp.Header().Get("Content-Length"), ShouldEqual, "0")
@@ -372,12 +417,14 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 			Print("\nManifests")
 			// create a blob/layer
 			resp, err := resty.R().Post(baseURL + prefix + "blobs/uploads/")
+      Printf("\nResponse body: %v\nResponse Header: %v\n", resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 202)
 			loc := resp.Header().Get("Location")
 			So(loc, ShouldNotBeEmpty)
 
 			resp, err = resty.R().Get(baseURL + loc)
+      Printf("\nResponse body: %v\nResponse Header: %v\n", resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 204)
 			content := []byte("this is a blob")
@@ -386,6 +433,7 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 			// monolithic blob upload: success
 			resp, err = resty.R().SetQueryParam("digest", digest.String()).
 				SetHeader("Content-Type", "application/octet-stream").SetBody(content).Put(baseURL + loc)
+      Printf("\nResponse body: %v\nResponse Header: %v\n", resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 201)
 			blobLoc := resp.Header().Get("Location")
@@ -401,6 +449,7 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 			So(digest, ShouldNotBeNil)
 			resp, err = resty.R().SetHeader("Content-Type", "application/vnd.oci.image.manifest.v1+json").
 				SetBody(content).Put(baseURL + prefix + "manifests/test:1.0")
+      Printf("\nResponse body: %v\nResponse Header: %v\n", resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 201)
 			d := resp.Header().Get(api.DistContentDigestKey)
@@ -409,43 +458,53 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 
 			// check/get by tag
 			resp, err = resty.R().Head(baseURL + prefix + "manifests/test:1.0")
+      Printf("\nResponse body: %v\nResponse Header: %v\n", resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 200)
 			resp, err = resty.R().Get(baseURL + prefix + "manifests/test:1.0")
+      Printf("\nResponse body: %v\nResponse Header: %v\n", resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 200)
 			So(resp.Body(), ShouldNotBeEmpty)
 			// check/get by reference
 			resp, err = resty.R().Head(baseURL + prefix + "manifests/" + digest.String())
+      Printf("\nResponse body: %v\nResponse Header: %v\n", resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 200)
 			resp, err = resty.R().Get(baseURL + prefix + "manifests/" + digest.String())
+      Printf("\nResponse body: %v\nResponse Header: %v\n", resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 200)
 			So(resp.Body(), ShouldNotBeEmpty)
 
 			// delete manifest
 			resp, err = resty.R().Delete(baseURL + prefix + "manifests/test:1.0")
+      Printf("\nResponse body: %v\nResponse Header: %v\n", resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 200)
 			// delete again should fail
 			resp, err = resty.R().Delete(baseURL + prefix + "manifests/" + digest.String())
+      Printf("\nResponse body: %v\nResponse Header: %v\n", resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 404)
 
 			// check/get by tag
 			resp, err = resty.R().Head(baseURL + prefix + "manifests/test:1.0")
+      Printf("\nResponse body: %v\nResponse Header: %v\n", resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 404)
 			resp, err = resty.R().Get(baseURL + prefix + "manifests/test:1.0")
+      Printf("\nResponse body: %v\nResponse Header: %v\n", resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 404)
 			So(resp.Body(), ShouldNotBeEmpty)
 			// check/get by reference
 			resp, err = resty.R().Head(baseURL + prefix + "manifests/" + digest.String())
+      Printf("\nResponse body: %v\nResponse Header: %v\n", resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 404)
 			resp, err = resty.R().Get(baseURL + prefix + "manifests/" + digest.String())
+      Printf("\nResponse body: %v\nResponse Header: %v\n", resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 404)
 			So(resp.Body(), ShouldNotBeEmpty)
