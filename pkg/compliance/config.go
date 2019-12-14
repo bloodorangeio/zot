@@ -5,8 +5,7 @@ type Config struct {
 	Port    string
 	Version string
   Namespace string
-  Username string
-  Password string
+  Userpass string
   UseHTTPS bool
   Token string
 }

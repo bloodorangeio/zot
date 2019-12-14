@@ -18,15 +18,12 @@ import (
 type (
   ZotRequest struct {
     *resty.Request
-    AuthToken string
   }
 )
 
 func newReq() *ZotRequest {
   restyRequest := resty.R()
-  return &ZotRequest{
-    restyRequest
-  }
+  return &ZotRequest{restyRequest}
 }
 
 func (r *ZotRequest) Execute(method string, url string) {
