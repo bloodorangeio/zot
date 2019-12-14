@@ -15,6 +15,23 @@ import (
 	"gopkg.in/resty.v1"
 )
 
+type (
+  ZotRequest struct {
+    *resty.Request
+    AuthToken string
+  }
+)
+
+func newReq() *ZotRequest {
+  restyRequest := resty.R()
+  return &ZotRequest{
+    restyRequest
+  }
+}
+
+func (r *ZotRequest) Execute(method string, url string) {
+}
+
 func CheckWorkflows(t *testing.T, config *compliance.Config) {
 	if config == nil || config.Address == "" || config.Port == "" || config.Namespace == "" {
 		panic("insufficient config")
