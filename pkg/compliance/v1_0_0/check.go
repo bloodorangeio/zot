@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"testing"
+  "regexp"
+  "strings"
 
 	"github.com/anuvu/zot/pkg/api"
 	"github.com/anuvu/zot/pkg/compliance"
@@ -18,15 +20,54 @@ import (
 type (
   ZotRequest struct {
     *resty.Request
+    Token string
   }
 )
 
 func newReq() *ZotRequest {
   restyRequest := resty.R()
-  return &ZotRequest{restyRequest}
+  return &ZotRequest{restyRequest, ""}
 }
 
-func (r *ZotRequest) Execute(method string, url string) {
+func (r *ZotRequest) Exec(method string, url string) (*resty.Response, error) {
+  resp, err := r.Execute(method, url)
+  if resp.StatusCode() == 401 {
+    header := resp.Header()
+    authInfo := header["Www-Authenticate"][0]
+//    fmt.Printf("\n==================\n%s", authInfo)
+    //re := regexp.MustCompile(`[a-zA-Z]+=".+?"`)
+    //rawFields := re.FindAllString(authInfo, -1)
+    re2 := regexp.MustCompile(`([a-zA-z]+)="(.+?)"`)
+    k := re2.FindAllStringSubmatch(authInfo, -1)
+    //var kv map[string]string
+    kv := make(map[string]string)
+    for i := 0; i < len(k); i++ {
+      kv[k[i][1]] = k[i][2]
+    }
+    realm := kv["realm"]
+    delete(kv, "realm")
+    //fmt.Printf("\nraw fields: %v\nks: %v", rawFields, kv)
+    var params []string
+    for k, v := range kv {
+      params = append(params, fmt.Sprintf("%s=%s", k, v))
+    }
+    pstring := strings.Join(params[:], "&")
+    authUrl := fmt.Sprintf("%s?%s", realm, pstring)
+    //fmt.Printf("\nurl: %s", authUrl)
+    ar := resty.R()
+    ar.SetBasicAuth("pmengelbert", "IxmSUToStj3xDM7URoAZm+AUBKN9RW9ksFeBnk87s/hQcLDKPPyd+oStCHGuHaw6+1nsQ1RT/QwH+SY136ByrM1t9a5vBrNWDf8dBEr7d7Q=")
+    authResp, _ := ar.Execute(method, authUrl)
+    re3 := regexp.MustCompile(`"token":"(.+?)"`)
+    tstring := re3.FindStringSubmatch(authResp.String())[1]
+    //fmt.Printf("\nauthResp: %v", authResp.String())
+    //fmt.Printf("\ntoken: %s", tstring)
+    r.SetAuthToken(tstring)
+    resp3, _ := r.Execute(method, url)
+    //fmt.Printf("\nresp3: %s", resp3.String())
+    return resp3, err
+  } else {
+    return resp, err
+  }
 }
 
 func CheckWorkflows(t *testing.T, config *compliance.Config) {
@@ -49,6 +90,7 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 		Convey("Check version", func() {
 			Print("\nCheck version")
 			resp, err := resty.R().Get(baseURL + "/v2/")
+      resp, _ = newReq().Exec("GET", baseURL + "/v2/")
       Printf("\nResponse body: %v\nResponse Header: %v\n", resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 200)
@@ -94,14 +136,16 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 			Print("\nGet images in a repository")
 			// non-existent repository should fail
 			resp, err := resty.R().Get(baseURL + prefix + "tags/list")
-      Printf("\nResponse body: %v\nResponse Header: %v\n", resp, resp.Header())
+      resp, _ = newReq().Exec("GET", baseURL + prefix + "tags/list")
+      Printf("\nResponse Code: %v\nResponse body: %v\nResponse Header: %v\n", resp.StatusCode(), resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 404)
 			So(resp.String(), ShouldNotBeEmpty)
 
 			// after newly created upload should succeed
 			resp, err = resty.R().Post(baseURL + prefix + "blobs/uploads/")
-      Printf("\nResponse body: %v\nResponse Header: %v\n", resp, resp.Header())
+      resp, _ = newReq().Exec("POST", baseURL + prefix + "tags/list")
+      Printf("\nResponse Code: %v\nResponse body: %v\nResponse Header: %v\n", resp.StatusCode(), resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 202)
 
@@ -115,7 +159,8 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 		Convey("Monolithic blob upload", func() {
 			Print("\nMonolithic blob upload")
 			resp, err := resty.R().Post(baseURL + prefix + "blobs/uploads/")
-      Printf("\nResponse body: %v\nResponse Header: %v\n", resp, resp.Header())
+      resp, _ = newReq().Exec("GET", baseURL + prefix + "tags/list")
+      Printf("\nResponse Code: %v\nResponse body: %v\nResponse Header: %v\n", resp.StatusCode(), resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 202)
 			loc := resp.Header().Get("Location")
@@ -529,4 +574,10 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 			So(resp.Body(), ShouldNotBeEmpty)
 		})
 	})
+}
+
+func main() {
+  protocol := "https"
+  baseURL := fmt.Sprintf("%s://%s:%s", protocol, "quay.io", "443")
+  _, _ = newReq().Exec("GET", baseURL + "/v2/")
 }
