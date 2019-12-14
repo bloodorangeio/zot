@@ -111,6 +111,8 @@ func NewRootCmd() *cobra.Command {
 	}
 	complianceCmd.Flags().StringVarP(&complianceConfig.Namespace, "namespace", "N", "repo",
 		"Namespace to test")
+	complianceCmd.Flags().BoolVarP(&complianceConfig.UseHTTPS, "https", "S", false,
+		"Use https if set to \"true\"")
 	complianceCmd.Flags().StringVarP(&complianceConfig.Port, "port", "P", "",
 		"Registry server port")
 	if err := complianceCmd.MarkFlagRequired("port"); err != nil {

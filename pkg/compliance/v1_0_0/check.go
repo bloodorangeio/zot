@@ -33,7 +33,12 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 	if config == nil || config.Address == "" || config.Port == "" || config.Namespace == "" {
 		panic("insufficient config")
 	}
-	baseURL := fmt.Sprintf("https://%s:%s", config.Address, config.Port)
+
+  protocol := "http"
+  if config.UseHTTPS {
+    protocol = protocol + "s"
+  }
+  baseURL := fmt.Sprintf("%s://%s:%s", protocol, config.Address, config.Port)
   prefix := fmt.Sprintf("/v2/%s/", config.Namespace)
 
 	fmt.Println("------------------------------")
