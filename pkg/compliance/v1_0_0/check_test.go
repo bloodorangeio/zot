@@ -25,6 +25,7 @@ func TestWorkflows(t *testing.T) {
 	v1_0_0.CheckWorkflows(t, &compliance.Config{Address: Address, Port: Port,
 		Namespace: Namespace, UseHTTPS: UseHTTPS})
 }
+
 func TestMain(m *testing.M) {
 	config := api.NewConfig()
 	config.HTTP.Address = Address

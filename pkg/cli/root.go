@@ -115,6 +115,10 @@ func NewRootCmd() *cobra.Command {
 		"Use https if set to \"true\"")
 	complianceCmd.Flags().StringVarP(&complianceConfig.Port, "port", "P", "",
 		"Registry server port")
+	complianceCmd.Flags().StringVarP(&complianceConfig.Token, "token", "T", "",
+		"Token for authorization")
+	complianceCmd.Flags().StringVarP(&complianceConfig.Userpass, "userpass", "U", "",
+    "Username and password for authorization. In the format 'username:password'")
 	if err := complianceCmd.MarkFlagRequired("port"); err != nil {
 		panic(err)
 	}
