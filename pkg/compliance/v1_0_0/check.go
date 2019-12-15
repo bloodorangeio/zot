@@ -1,5 +1,6 @@
 //nolint (dupl)
-package v1_0_0
+//package v1_0_0
+package main
 
 import (
 	"bytes"
@@ -29,31 +30,35 @@ func newReq() *ZotRequest {
   return &ZotRequest{restyRequest, ""}
 }
 
+func getAuthInfoMap(header map[string][]string) map[string]string {
+    authInfo := header["Www-Authenticate"][0]
+    re := regexp.MustCompile(`([a-zA-z]+)="(.+?)"`)
+    ary := re.FindAllStringSubmatch(authInfo, -1)
+    m := make(map[string]string)
+    for i := 0; i < len(ary); i++ {
+      m[ary[i][1]] = ary[i][2]
+    }
+    return m
+}
+
+func buildAuthUrlString(m map[string]string) string {
+  realm := m["realm"]
+  delete(m, "realm")
+  var prms []string
+  for k, v := range m {
+    prms = append(prms, fmt.Sprintf("%s=%s", k, v))
+  }
+  paramString := strings.Join(prms, "&")
+  authUrl := fmt.Sprintf("%s?%s", realm, paramString)
+  return authUrl
+}
+
 func (r *ZotRequest) Exec(method string, url string) (*resty.Response, error) {
   resp, err := r.Execute(method, url)
   if resp.StatusCode() == 401 {
-    header := resp.Header()
-    authInfo := header["Www-Authenticate"][0]
-//    fmt.Printf("\n==================\n%s", authInfo)
-    //re := regexp.MustCompile(`[a-zA-Z]+=".+?"`)
-    //rawFields := re.FindAllString(authInfo, -1)
-    re2 := regexp.MustCompile(`([a-zA-z]+)="(.+?)"`)
-    k := re2.FindAllStringSubmatch(authInfo, -1)
-    //var kv map[string]string
-    kv := make(map[string]string)
-    for i := 0; i < len(k); i++ {
-      kv[k[i][1]] = k[i][2]
-    }
-    realm := kv["realm"]
-    delete(kv, "realm")
-    //fmt.Printf("\nraw fields: %v\nks: %v", rawFields, kv)
-    var params []string
-    for k, v := range kv {
-      params = append(params, fmt.Sprintf("%s=%s", k, v))
-    }
-    pstring := strings.Join(params[:], "&")
-    authUrl := fmt.Sprintf("%s?%s", realm, pstring)
-    //fmt.Printf("\nurl: %s", authUrl)
+    kv := getAuthInfoMap(resp.Header())
+    authUrl := buildAuthUrlString(kv)
+    fmt.Printf("\nurl: %s", authUrl)
     ar := resty.R()
     ar.SetBasicAuth("pmengelbert", "IxmSUToStj3xDM7URoAZm+AUBKN9RW9ksFeBnk87s/hQcLDKPPyd+oStCHGuHaw6+1nsQ1RT/QwH+SY136ByrM1t9a5vBrNWDf8dBEr7d7Q=")
     authResp, _ := ar.Execute(method, authUrl)
