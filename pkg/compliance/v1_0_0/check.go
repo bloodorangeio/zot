@@ -21,13 +21,12 @@ import (
 type (
 	ZotRequest struct {
 		*resty.Request
-		Token string
 	}
 )
 
 func newReq() *ZotRequest {
 	restyRequest := resty.R()
-	return &ZotRequest{restyRequest, ""}
+	return &ZotRequest{restyRequest}
 }
 
 func getAuthInfoMap(header map[string][]string) map[string]string {
