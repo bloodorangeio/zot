@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"os"
 	"testing"
 
 	"github.com/anuvu/zot/errors"
@@ -80,6 +81,7 @@ func NewRootCmd() *cobra.Command {
 
 	gcCmd.Flags().StringVarP(&config.Storage.RootDirectory, "storage-root-dir", "r", "",
 		"Use specified directory for filestore backing image data")
+
 	_ = gcCmd.MarkFlagRequired("storage-root-dir")
 	gcCmd.Flags().BoolVarP(&gcDelUntagged, "delete-untagged", "m", false,
 		"delete manifests that are not currently referenced via tag")
@@ -101,14 +103,19 @@ func NewRootCmd() *cobra.Command {
 			default:
 				v1_0_0.CheckWorkflows(t, complianceConfig)
 			}
+			if t.Failed() {
+				os.Exit(1)
+			}
 		},
 	}
 
 	complianceCmd.Flags().StringVarP(&complianceConfig.Address, "address", "H", "",
 		"Registry server address")
+
 	if err := complianceCmd.MarkFlagRequired("address"); err != nil {
 		panic(err)
 	}
+
 	complianceCmd.Flags().StringVarP(&complianceConfig.Namespace, "namespace", "N", "repo",
 		"Namespace to test")
 	complianceCmd.Flags().BoolVarP(&complianceConfig.UseHTTPS, "https", "S", false,
@@ -117,11 +124,15 @@ func NewRootCmd() *cobra.Command {
 		"Registry server port")
 	complianceCmd.Flags().StringVarP(&complianceConfig.Userpass, "userpass", "U", "",
     "Username and password for authorization. In the format 'username:password'")
+
 	if err := complianceCmd.MarkFlagRequired("port"); err != nil {
 		panic(err)
 	}
+
 	complianceCmd.Flags().StringVarP(&complianceConfig.Version, "version", "V", "all",
 		"OCI dist-spec version to check")
+	complianceCmd.Flags().BoolVarP(&complianceConfig.OutputJSON, "json", "j", false,
+		"output test results as JSON")
 
 	rootCmd := &cobra.Command{
 		Use:   "zot",

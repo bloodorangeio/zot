@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"io"
+	"os"
 	"strings"
 	"testing"
 
@@ -15,6 +17,7 @@ import (
 	godigest "github.com/opencontainers/go-digest"
 	ispec "github.com/opencontainers/image-spec/specs-go/v1"
 	. "github.com/smartystreets/goconvey/convey"
+	"github.com/smartystreets/goconvey/convey/reporting"
 	"gopkg.in/resty.v1"
 )
 
@@ -88,6 +91,11 @@ func (r *ZotRequest) Exec(method, url, userpass string) (*resty.Response, error)
 func CheckWorkflows(t *testing.T, config *compliance.Config) {
 	if config == nil || config.Address == "" || config.Port == "" || config.Namespace == "" {
 		panic("insufficient config")
+	}
+
+	if config.OutputJSON {
+		outputJSONEnter()
+		defer outputJSONExit()
 	}
 
 	protocol := "http"
@@ -178,7 +186,7 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 			Print("\nMonolithic blob upload")
 			resp, err := resty.R().Post(baseURL + prefix + "blobs/uploads/")
       //resp, err := newReq().Exec(resty.MethodPost, baseURL + prefix + "blobs/uploads/")
-			Printf("\nResponse code: %v\nResponse body: %v\nResponse Header: %v\n", resp.StatusCode(), resp.StatusCode(), resp, resp.Header())
+			Printf("\nResponse code: %v\nResponse body: %v\nResponse Header: %v\n", resp.StatusCode(), resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 202)
 			loc := resp.Header().Get("Location")
@@ -598,8 +606,59 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 	})
 }
 
-//func main() {
-//	protocol := "https"
-//	baseURL := fmt.Sprintf("%s://%s:%s", protocol, "quay.io", "443")
-//	_, _ = newReq().Exec("GET", baseURL+"/v2/")
-//}
+var (
+	old  *os.File
+	r    *os.File
+	w    *os.File
+	outC chan string
+)
+
+func outputJSONEnter() {
+	// this env var instructs goconvey to output results to JSON (stdout)
+	os.Setenv("GOCONVEY_REPORTER", "json")
+
+	// stdout capture copied from: https://stackoverflow.com/a/29339052
+	old = os.Stdout
+	// keep backup of the real stdout
+	r, w, _ = os.Pipe()
+	outC = make(chan string)
+	os.Stdout = w
+
+	// copy the output in a separate goroutine so printing can't block indefinitely
+	go func() {
+		var buf bytes.Buffer
+		io.Copy(&buf, r)
+		outC <- buf.String()
+	}()
+}
+
+func outputJSONExit() {
+	// back to normal state
+	w.Close()
+	os.Stdout = old // restoring the real stdout
+	out := <-outC
+
+	// The output of JSON is combined with regular output, so we look for the
+	// first occurrence of the "{" character and take everything after that
+	rawJSON := "[{" + strings.Join(strings.Split(out, "{")[1:], "{")
+	rawJSON = strings.Replace(rawJSON, reporting.OpenJson, "", 1)
+	rawJSON = strings.Replace(rawJSON, reporting.CloseJson, "", 1)
+	tmp := strings.Split(rawJSON, ",")
+	rawJSON = strings.Join(tmp[0:len(tmp)-1], ",") + "]"
+
+	rawJSONMinified := validateMinifyRawJSON(rawJSON)
+	fmt.Println(rawJSONMinified)
+}
+
+func validateMinifyRawJSON(rawJSON string) string {
+	var j interface{}
+	err := json.Unmarshal([]byte(rawJSON), &j)
+	if err != nil {
+		panic(err)
+	}
+	rawJSONBytesMinified, err := json.Marshal(j)
+	if err != nil {
+		panic(err)
+	}
+	return string(rawJSONBytesMinified)
+}

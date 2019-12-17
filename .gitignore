@@ -14,12 +14,5 @@
 bin/
 bazel-*
 coverage.txt
-test/data/ca.crt
-test/data/ca.key
-test/data/ca.srl
-test/data/client.cert
-test/data/client.csr
-test/data/client.key
-test/data/server.cert
-test/data/server.csr
-test/data/server.key
+test/data/
+*.orig

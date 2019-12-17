@@ -18,14 +18,17 @@ import (
 )
 
 const (
+	// BlobUploadDir defines the upload directory for blob uploads.
 	BlobUploadDir = ".uploads"
 )
 
+// BlobUpload models and upload request.
 type BlobUpload struct {
 	StoreName string
 	ID        string
 }
 
+// ImageStore provides the image storage operations.
 type ImageStore struct {
 	rootDir     string
 	lock        *sync.Mutex
@@ -33,12 +36,14 @@ type ImageStore struct {
 	log         zerolog.Logger
 }
 
+// NewImageStore returns a new image store backed by a file storage.
 func NewImageStore(rootDir string, log zlog.Logger) *ImageStore {
 	is := &ImageStore{rootDir: rootDir,
 		lock:        &sync.Mutex{},
 		blobUploads: make(map[string]BlobUpload),
 		log:         log.With().Caller().Logger(),
 	}
+
 	if _, err := os.Stat(rootDir); os.IsNotExist(err) {
 		_ = os.MkdirAll(rootDir, 0700)
 	}
@@ -46,6 +51,7 @@ func NewImageStore(rootDir string, log zlog.Logger) *ImageStore {
 	return is
 }
 
+// InitRepo creates an image repository under this store.
 func (is *ImageStore) InitRepo(name string) error {
 	repoDir := path.Join(is.rootDir, name)
 
@@ -69,9 +75,11 @@ func (is *ImageStore) InitRepo(name string) error {
 	if _, err := os.Stat(ilPath); err != nil {
 		il := ispec.ImageLayout{Version: ispec.ImageLayoutVersion}
 		buf, err := json.Marshal(il)
+
 		if err != nil {
 			is.log.Panic().Err(err).Msg("unable to marshal JSON")
 		}
+
 		if err := ioutil.WriteFile(ilPath, buf, 0644); err != nil {
 			is.log.Panic().Err(err).Str("file", ilPath).Msg("unable to write file")
 		}
@@ -83,9 +91,11 @@ func (is *ImageStore) InitRepo(name string) error {
 		index := ispec.Index{}
 		index.SchemaVersion = 2
 		buf, err := json.Marshal(index)
+
 		if err != nil {
 			is.log.Panic().Err(err).Msg("unable to marshal JSON")
 		}
+
 		if err := ioutil.WriteFile(indexPath, buf, 0644); err != nil {
 			is.log.Panic().Err(err).Str("file", indexPath).Msg("unable to write file")
 		}
@@ -94,6 +104,7 @@ func (is *ImageStore) InitRepo(name string) error {
 	return nil
 }
 
+// ValidateRepo validates that the repository layout is complaint with the OCI repo layout.
 func (is *ImageStore) ValidateRepo(name string) (bool, error) {
 	// https://github.com/opencontainers/image-spec/blob/master/image-layout.md#content
 	// at least, expect exactly 4 entries - ["blobs", "oci-layout", "index.json"] and BlobUploadDir
@@ -124,6 +135,7 @@ func (is *ImageStore) ValidateRepo(name string) (bool, error) {
 		if file.Name() == "blobs" && !file.IsDir() {
 			return false, nil
 		}
+
 		found[file.Name()] = true
 	}
 
@@ -150,6 +162,7 @@ func (is *ImageStore) ValidateRepo(name string) (bool, error) {
 	return true, nil
 }
 
+// GetRepositories returns a list of all the repositories under this store.
 func (is *ImageStore) GetRepositories() ([]string, error) {
 	dir := is.rootDir
 
@@ -187,12 +200,15 @@ func (is *ImageStore) GetRepositories() ([]string, error) {
 	return stores, err
 }
 
+// GetImageTags returns a list of image tags available in the specified repository.
 func (is *ImageStore) GetImageTags(repo string) ([]string, error) {
 	dir := path.Join(is.rootDir, repo)
 	if !dirExists(dir) {
 		return nil, errors.ErrRepoNotFound
 	}
+
 	buf, err := ioutil.ReadFile(path.Join(dir, "index.json"))
+
 	if err != nil {
 		is.log.Error().Err(err).Str("dir", dir).Msg("failed to read index.json")
 		return nil, errors.ErrRepoNotFound
@@ -216,12 +232,15 @@ func (is *ImageStore) GetImageTags(repo string) ([]string, error) {
 	return tags, nil
 }
 
+// GetImageManifest returns the image manifest of an image in the specific repository.
 func (is *ImageStore) GetImageManifest(repo string, reference string) ([]byte, string, string, error) {
 	dir := path.Join(is.rootDir, repo)
 	if !dirExists(dir) {
 		return nil, "", "", errors.ErrRepoNotFound
 	}
+
 	buf, err := ioutil.ReadFile(path.Join(dir, "index.json"))
+
 	if err != nil {
 		is.log.Error().Err(err).Str("dir", dir).Msg("failed to read index.json")
 		return nil, "", "", err
@@ -234,13 +253,17 @@ func (is *ImageStore) GetImageManifest(repo string, reference string) ([]byte, s
 	}
 
 	found := false
+
 	var digest godigest.Digest
+
 	mediaType := ""
+
 	for _, m := range index.Manifests {
 		if reference == m.Digest.String() {
 			digest = m.Digest
 			mediaType = m.MediaType
 			found = true
+
 			break
 		}
 
@@ -249,6 +272,7 @@ func (is *ImageStore) GetImageManifest(repo string, reference string) ([]byte, s
 			digest = m.Digest
 			mediaType = m.MediaType
 			found = true
+
 			break
 		}
 	}
@@ -276,9 +300,9 @@ func (is *ImageStore) GetImageManifest(repo string, reference string) ([]byte, s
 	return buf, digest.String(), mediaType, nil
 }
 
-func (is *ImageStore) PutImageManifest(repo string, reference string,
-	mediaType string, body []byte) (string, error) {
-
+// PutImageManifest adds an image manifest to the repository.
+func (is *ImageStore) PutImageManifest(repo string, reference string, mediaType string,
+	body []byte) (string, error) {
 	if err := is.InitRepo(repo); err != nil {
 		return "", err
 	}
@@ -299,6 +323,7 @@ func (is *ImageStore) PutImageManifest(repo string, reference string,
 	for _, l := range m.Layers {
 		digest := l.Digest
 		blobPath := is.BlobPath(repo, digest)
+
 		if _, err := os.Stat(blobPath); err != nil {
 			return digest.String(), errors.ErrBlobNotFound
 		}
@@ -307,17 +332,20 @@ func (is *ImageStore) PutImageManifest(repo string, reference string,
 	mDigest := godigest.FromBytes(body)
 	refIsDigest := false
 	d, err := godigest.Parse(reference)
+
 	if err == nil {
 		if d.String() != mDigest.String() {
 			is.log.Error().Str("actual", mDigest.String()).Str("expected", d.String()).
 				Msg("manifest digest is not valid")
 			return "", errors.ErrBadManifest
 		}
+
 		refIsDigest = true
 	}
 
 	dir := path.Join(is.rootDir, repo)
 	buf, err := ioutil.ReadFile(path.Join(dir, "index.json"))
+
 	if err != nil {
 		is.log.Error().Err(err).Str("dir", dir).Msg("failed to read index.json")
 		return "", err
@@ -342,6 +370,7 @@ func (is *ImageStore) PutImageManifest(repo string, reference string,
 			// nothing changed, so don't update
 			desc = m
 			updateIndex = false
+
 			break
 		}
 
@@ -351,12 +380,15 @@ func (is *ImageStore) PutImageManifest(repo string, reference string,
 				// nothing changed, so don't update
 				desc = m
 				updateIndex = false
+
 				break
 			}
 			// manifest contents have changed for the same tag
 			desc = m
 			desc.Digest = mDigest
+
 			index.Manifests = append(index.Manifests[:i], index.Manifests[i+1:]...)
+
 			break
 		}
 	}
@@ -371,6 +403,7 @@ func (is *ImageStore) PutImageManifest(repo string, reference string,
 	dir = path.Join(dir, mDigest.Algorithm().String())
 	_ = os.MkdirAll(dir, 0755)
 	file := path.Join(dir, mDigest.Encoded())
+
 	if err := ioutil.WriteFile(file, body, 0644); err != nil {
 		return "", err
 	}
@@ -380,9 +413,11 @@ func (is *ImageStore) PutImageManifest(repo string, reference string,
 	dir = path.Join(is.rootDir, repo)
 	file = path.Join(dir, "index.json")
 	buf, err = json.Marshal(index)
+
 	if err != nil {
 		return "", err
 	}
+
 	if err := ioutil.WriteFile(file, buf, 0644); err != nil {
 		return "", err
 	}
@@ -390,12 +425,15 @@ func (is *ImageStore) PutImageManifest(repo string, reference string,
 	return desc.Digest.String(), nil
 }
 
+// DeleteImageManifest deletes the image manifest from the repository.
 func (is *ImageStore) DeleteImageManifest(repo string, reference string) error {
 	dir := path.Join(is.rootDir, repo)
 	if !dirExists(dir) {
 		return errors.ErrRepoNotFound
 	}
+
 	buf, err := ioutil.ReadFile(path.Join(dir, "index.json"))
+
 	if err != nil {
 		is.log.Error().Err(err).Str("dir", dir).Msg("failed to read index.json")
 		return err
@@ -408,13 +446,18 @@ func (is *ImageStore) DeleteImageManifest(repo string, reference string) error {
 	}
 
 	found := false
+
 	var digest godigest.Digest
+
 	var i int
+
 	var m ispec.Descriptor
+
 	for i, m = range index.Manifests {
 		if reference == m.Digest.String() {
 			digest = m.Digest
 			found = true
+
 			break
 		}
 
@@ -422,6 +465,7 @@ func (is *ImageStore) DeleteImageManifest(repo string, reference string) error {
 		if ok && v == reference {
 			digest = m.Digest
 			found = true
+
 			break
 		}
 	}
@@ -438,9 +482,11 @@ func (is *ImageStore) DeleteImageManifest(repo string, reference string) error {
 	dir = path.Join(is.rootDir, repo)
 	file := path.Join(dir, "index.json")
 	buf, err = json.Marshal(index)
+
 	if err != nil {
 		return err
 	}
+
 	if err := ioutil.WriteFile(file, buf, 0644); err != nil {
 		return err
 	}
@@ -454,13 +500,16 @@ func (is *ImageStore) DeleteImageManifest(repo string, reference string) error {
 	return nil
 }
 
+// BlobUploadPath returns the upload path for a blob in this store.
 func (is *ImageStore) BlobUploadPath(repo string, uuid string) string {
 	dir := path.Join(is.rootDir, repo)
 	blobUploadPath := path.Join(dir, BlobUploadDir)
 	blobUploadPath = path.Join(blobUploadPath, uuid)
+
 	return blobUploadPath
 }
 
+// NewBlobUpload returns the unique ID for an upload in progress.
 func (is *ImageStore) NewBlobUpload(repo string) (string, error) {
 	if err := is.InitRepo(repo); err != nil {
 		return "", err
@@ -474,6 +523,7 @@ func (is *ImageStore) NewBlobUpload(repo string) (string, error) {
 	u := uuid.String()
 	blobUploadPath := is.BlobUploadPath(repo, u)
 	file, err := os.OpenFile(blobUploadPath, os.O_WRONLY|os.O_TRUNC|os.O_CREATE, 0600)
+
 	if err != nil {
 		return "", errors.ErrRepoNotFound
 	}
@@ -482,22 +532,26 @@ func (is *ImageStore) NewBlobUpload(repo string) (string, error) {
 	return u, nil
 }
 
+// GetBlobUpload returns the current size of a blob upload.
 func (is *ImageStore) GetBlobUpload(repo string, uuid string) (int64, error) {
 	blobUploadPath := is.BlobUploadPath(repo, uuid)
 	fi, err := os.Stat(blobUploadPath)
+
 	if err != nil {
 		if os.IsNotExist(err) {
 			return -1, errors.ErrUploadNotFound
 		}
+
 		return -1, err
 	}
 
 	return fi.Size(), nil
 }
 
-func (is *ImageStore) PutBlobChunk(repo string, uuid string,
-	from int64, to int64, body io.Reader) (int64, error) {
-
+// PutBlobChunk writes another chunk of data to the specified blob. It returns
+// the number of actual bytes to the blob.
+func (is *ImageStore) PutBlobChunk(repo string, uuid string, from int64, to int64,
+	body io.Reader) (int64, error) {
 	if err := is.InitRepo(repo); err != nil {
 		return -1, err
 	}
@@ -508,6 +562,7 @@ func (is *ImageStore) PutBlobChunk(repo string, uuid string,
 	if err != nil {
 		return -1, errors.ErrUploadNotFound
 	}
+
 	if from != fi.Size() {
 		is.log.Error().Int64("expected", from).Int64("actual", fi.Size()).
 			Msg("invalid range start for blob upload")
@@ -529,23 +584,27 @@ func (is *ImageStore) PutBlobChunk(repo string, uuid string,
 	}
 
 	n, err := io.Copy(file, body)
+
 	return n, err
 }
 
+// BlobUploadInfo returns the current blob size in bytes.
 func (is *ImageStore) BlobUploadInfo(repo string, uuid string) (int64, error) {
 	blobUploadPath := is.BlobUploadPath(repo, uuid)
 	fi, err := os.Stat(blobUploadPath)
+
 	if err != nil {
 		is.log.Error().Err(err).Str("blob", blobUploadPath).Msg("failed to stat blob")
 		return -1, err
 	}
+
 	size := fi.Size()
+
 	return size, nil
 }
 
-func (is *ImageStore) FinishBlobUpload(repo string, uuid string,
-	body io.Reader, digest string) error {
-
+// FinishBlobUpload finalizes the blob upload and moves blob the repository.
+func (is *ImageStore) FinishBlobUpload(repo string, uuid string, body io.Reader, digest string) error {
 	dstDigest, err := godigest.Parse(digest)
 	if err != nil {
 		is.log.Error().Err(err).Str("digest", digest).Msg("failed to parse digest")
@@ -565,8 +624,10 @@ func (is *ImageStore) FinishBlobUpload(repo string, uuid string,
 		is.log.Error().Err(err).Str("blob", src).Msg("failed to open blob")
 		return errors.ErrUploadNotFound
 	}
+
 	srcDigest, err := godigest.FromReader(f)
 	f.Close()
+
 	if err != nil {
 		is.log.Error().Err(err).Str("blob", src).Msg("failed to open blob")
 		return errors.ErrBadBlobDigest
@@ -590,23 +651,27 @@ func (is *ImageStore) FinishBlobUpload(repo string, uuid string,
 	return err
 }
 
+// DeleteBlobUpload deletes an existing blob upload that is currently in progress.
 func (is *ImageStore) DeleteBlobUpload(repo string, uuid string) error {
 	blobUploadPath := is.BlobUploadPath(repo, uuid)
 	_ = os.Remove(blobUploadPath)
+
 	return nil
 }
 
+// BlobPath returns the repository path of a blob.
 func (is *ImageStore) BlobPath(repo string, digest godigest.Digest) string {
 	dir := path.Join(is.rootDir, repo)
 	blobPath := path.Join(dir, "blobs")
 	blobPath = path.Join(blobPath, digest.Algorithm().String())
 	blobPath = path.Join(blobPath, digest.Encoded())
+
 	return blobPath
 }
 
+// CheckBlob verifies a blob and returns true if the blob is correct.
 func (is *ImageStore) CheckBlob(repo string, digest string,
 	mediaType string) (bool, int64, error) {
-
 	d, err := godigest.Parse(digest)
 	if err != nil {
 		is.log.Error().Err(err).Str("digest", digest).Msg("failed to parse digest")
@@ -624,11 +689,10 @@ func (is *ImageStore) CheckBlob(repo string, digest string,
 	return true, blobInfo.Size(), nil
 }
 
+// GetBlob returns a stream to read the blob.
 // FIXME: we should probably parse the manifest and use (digest, mediaType) as a
 // blob selector instead of directly downloading the blob
-func (is *ImageStore) GetBlob(repo string, digest string,
-	mediaType string) (io.Reader, int64, error) {
-
+func (is *ImageStore) GetBlob(repo string, digest string, mediaType string) (io.Reader, int64, error) {
 	d, err := godigest.Parse(digest)
 	if err != nil {
 		is.log.Error().Err(err).Str("digest", digest).Msg("failed to parse digest")
@@ -652,6 +716,7 @@ func (is *ImageStore) GetBlob(repo string, digest string,
 	return blobReader, blobInfo.Size(), nil
 }
 
+// DeleteBlob removes the blob from the repository.
 func (is *ImageStore) DeleteBlob(repo string, digest string) error {
 	d, err := godigest.Parse(digest)
 	if err != nil {
@@ -674,8 +739,8 @@ func (is *ImageStore) DeleteBlob(repo string, digest string) error {
 
 // garbage collection
 
+// Scrub will clean up all unreferenced blobs.
 // TODO
-
 func Scrub(dir string, fix bool) error {
 	return nil
 }
@@ -687,9 +752,11 @@ func dirExists(d string) bool {
 	if err != nil && os.IsNotExist(err) {
 		return false
 	}
+
 	if !fi.IsDir() {
 		return false
 	}
+
 	return true
 }
 

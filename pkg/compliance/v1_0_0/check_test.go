@@ -1,60 +1,89 @@
+//nolint (dupl)
 package v1_0_0_test
 
 import (
 	"context"
 	"fmt"
 	"io/ioutil"
-	"os"
 	"testing"
 	"time"
 
 	"github.com/anuvu/zot/pkg/api"
 	"github.com/anuvu/zot/pkg/compliance"
 	"github.com/anuvu/zot/pkg/compliance/v1_0_0"
+	"github.com/phayes/freeport"
 	"gopkg.in/resty.v1"
 )
 
-const (
-	Address   = "127.0.0.1"
-	Port      = "8080"
-	Namespace = "repo"
-	UseHTTPS  = false
+var (
+	listenAddress = "127.0.0.1"
+  namespace = "repo"
+  useHTTPS = false
 )
 
 func TestWorkflows(t *testing.T) {
-	v1_0_0.CheckWorkflows(t, &compliance.Config{Address: Address, Port: Port,
-		Namespace: Namespace, UseHTTPS: UseHTTPS})
+	ctrl, randomPort := startServer()
+	defer stopServer(ctrl)
+	v1_0_0.CheckWorkflows(t, &compliance.Config{
+		Address: listenAddress,
+		Port:    randomPort,
+    Namespace: namespace,
+    UseHTTPS: useHTTPS,
+	})
 }
 
-func TestMain(m *testing.M) {
+//func TestWorkflowsOutputJSON(t *testing.T) {
+//	ctrl, randomPort := startServer()
+//	defer stopServer(ctrl)
+//	v1_0_0.CheckWorkflows(t, &compliance.Config{
+//		Address:    listenAddress,
+//		Port:       randomPort,
+//		OutputJSON: true,
+//    Namespace: namespace,
+//    UseHTTPS: useHTTPS,
+//	})
+//}
+
+// start local server on random open port
+func startServer() (*api.Controller, string) {
+	portInt, err := freeport.GetFreePort()
+	if err != nil {
+		panic(err)
+	}
+	randomPort := fmt.Sprintf("%d", portInt)
+	fmt.Println(randomPort)
+
 	config := api.NewConfig()
-	config.HTTP.Address = Address
-	config.HTTP.Port = Port
-	c := api.NewController(config)
+	config.HTTP.Address = listenAddress
+	config.HTTP.Port = randomPort
+	ctrl := api.NewController(config)
 	dir, err := ioutil.TempDir("", "oci-repo-test")
 	if err != nil {
 		panic(err)
 	}
+
 	//defer os.RemoveAll(dir)
-	c.Config.Storage.RootDirectory = dir
+	ctrl.Config.Storage.RootDirectory = dir
 	go func() {
 		// this blocks
-		if err := c.Run(); err != nil {
+		if err := ctrl.Run(); err != nil {
 			return
 		}
 	}()
 
-	BaseURL := fmt.Sprintf("http://%s:%s", Address, Port)
+	baseURL := fmt.Sprintf("http://%s:%s", listenAddress, randomPort)
 	for {
 		// poll until ready
-		resp, _ := resty.R().Get(BaseURL)
+		resp, _ := resty.R().Get(baseURL)
 		if resp.StatusCode() == 404 {
 			break
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
-	status := m.Run()
-	ctx := context.Background()
-	_ = c.Server.Shutdown(ctx)
-	os.Exit(status)
+
+	return ctrl, randomPort
+}
+
+func stopServer(ctrl *api.Controller) {
+	ctrl.Server.Shutdown(context.Background())
 }
