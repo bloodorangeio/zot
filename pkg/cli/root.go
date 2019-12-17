@@ -118,17 +118,10 @@ func NewRootCmd() *cobra.Command {
 
 	complianceCmd.Flags().StringVarP(&complianceConfig.Namespace, "namespace", "N", "repo",
 		"Namespace to test")
-	complianceCmd.Flags().BoolVarP(&complianceConfig.UseHTTPS, "https", "S", false,
-		"Use https if set to \"true\"")
-	complianceCmd.Flags().StringVarP(&complianceConfig.Port, "port", "P", "",
-		"Registry server port")
-	complianceCmd.Flags().StringVarP(&complianceConfig.Userpass, "userpass", "U", "",
-		"Username and password for authorization. In the format 'username:password'")
-
-	if err := complianceCmd.MarkFlagRequired("port"); err != nil {
-		panic(err)
-	}
-
+	complianceCmd.Flags().StringVarP(&complianceConfig.Username, "username", "U", "",
+		"Username for authentication")
+	complianceCmd.Flags().StringVarP(&complianceConfig.Password, "password", "P", "",
+		"Password for authentication")
 	complianceCmd.Flags().StringVarP(&complianceConfig.Version, "version", "V", "all",
 		"OCI dist-spec version to check")
 	complianceCmd.Flags().BoolVarP(&complianceConfig.OutputJSON, "json", "j", false,

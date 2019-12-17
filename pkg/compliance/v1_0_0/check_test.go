@@ -16,19 +16,16 @@ import (
 )
 
 var (
-	listenAddress = "127.0.0.1"
-	namespace     = "repo"
-	useHTTPS      = false
+	listenHost = "127.0.0.1"
+	namespace  = "repo"
 )
 
 func TestWorkflows(t *testing.T) {
 	ctrl, randomPort := startServer()
 	defer stopServer(ctrl)
 	v1_0_0.CheckWorkflows(t, &compliance.Config{
-		Address:   listenAddress,
-		Port:      randomPort,
+		Address:   fmt.Sprintf("http://%s:%s", listenHost, randomPort),
 		Namespace: namespace,
-		UseHTTPS:  useHTTPS,
 	})
 }
 
@@ -36,11 +33,10 @@ func TestWorkflows(t *testing.T) {
 //	ctrl, randomPort := startServer()
 //	defer stopServer(ctrl)
 //	v1_0_0.CheckWorkflows(t, &compliance.Config{
-//		Address:    listenAddress,
+//		Address:    listenHost,
 //		Port:       randomPort,
 //		OutputJSON: true,
 //    Namespace: namespace,
-//    UseHTTPS: useHTTPS,
 //	})
 //}
 
@@ -54,7 +50,7 @@ func startServer() (*api.Controller, string) {
 	fmt.Println(randomPort)
 
 	config := api.NewConfig()
-	config.HTTP.Address = listenAddress
+	config.HTTP.Address = listenHost
 	config.HTTP.Port = randomPort
 	ctrl := api.NewController(config)
 	dir, err := ioutil.TempDir("", "oci-repo-test")
@@ -71,7 +67,7 @@ func startServer() (*api.Controller, string) {
 		}
 	}()
 
-	baseURL := fmt.Sprintf("http://%s:%s", listenAddress, randomPort)
+	baseURL := fmt.Sprintf("http://%s:%s", listenHost, randomPort)
 	for {
 		// poll until ready
 		resp, _ := resty.R().Get(baseURL)
