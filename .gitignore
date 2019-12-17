@@ -17,3 +17,5 @@ coverage.txt
 test/data/
 *.orig
 .idea/
+vendor/
+.DS_Store
