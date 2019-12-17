@@ -123,7 +123,7 @@ func NewRootCmd() *cobra.Command {
 	complianceCmd.Flags().StringVarP(&complianceConfig.Port, "port", "P", "",
 		"Registry server port")
 	complianceCmd.Flags().StringVarP(&complianceConfig.Userpass, "userpass", "U", "",
-    "Username and password for authorization. In the format 'username:password'")
+		"Username and password for authorization. In the format 'username:password'")
 
 	if err := complianceCmd.MarkFlagRequired("port"); err != nil {
 		panic(err)

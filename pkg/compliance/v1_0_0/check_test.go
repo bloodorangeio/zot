@@ -17,18 +17,18 @@ import (
 
 var (
 	listenAddress = "127.0.0.1"
-  namespace = "repo"
-  useHTTPS = false
+	namespace     = "repo"
+	useHTTPS      = false
 )
 
 func TestWorkflows(t *testing.T) {
 	ctrl, randomPort := startServer()
 	defer stopServer(ctrl)
 	v1_0_0.CheckWorkflows(t, &compliance.Config{
-		Address: listenAddress,
-		Port:    randomPort,
-    Namespace: namespace,
-    UseHTTPS: useHTTPS,
+		Address:   listenAddress,
+		Port:      randomPort,
+		Namespace: namespace,
+		UseHTTPS:  useHTTPS,
 	})
 }
 
