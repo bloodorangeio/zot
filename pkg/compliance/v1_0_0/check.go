@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/smartystreets/goconvey/convey/reporting"
 	"io"
 	"os"
 	"regexp"
@@ -16,7 +17,6 @@ import (
 	godigest "github.com/opencontainers/go-digest"
 	ispec "github.com/opencontainers/image-spec/specs-go/v1"
 	. "github.com/smartystreets/goconvey/convey"
-	"github.com/smartystreets/goconvey/convey/reporting"
 	"gopkg.in/resty.v1"
 )
 
@@ -624,11 +624,10 @@ func outputJSONExit() {
 
 	// The output of JSON is combined with regular output, so we look for the
 	// first occurrence of the "{" character and take everything after that
-	rawJSON := "[{" + strings.Join(strings.Split(out, "{")[1:], "{")
-	rawJSON = strings.Replace(rawJSON, reporting.OpenJson, "", 1)
-	rawJSON = strings.Replace(rawJSON, reporting.CloseJson, "", 1)
-	tmp := strings.Split(rawJSON, ",")
-	rawJSON = strings.Join(tmp[0:len(tmp)-1], ",") + "]"
+	rString := fmt.Sprintf("(?s)%s(.*),.?%s", reporting.OpenJson, reporting.CloseJson)
+	re := regexp.MustCompile(rString)
+	matchArray := re.FindStringSubmatch(out)
+	rawJSON := fmt.Sprintf("[%s]", matchArray[1])
 
 	rawJSONMinified := validateMinifyRawJSON(rawJSON)
 	fmt.Println(rawJSONMinified)

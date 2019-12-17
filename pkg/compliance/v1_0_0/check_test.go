@@ -29,16 +29,15 @@ func TestWorkflows(t *testing.T) {
 	})
 }
 
-//func TestWorkflowsOutputJSON(t *testing.T) {
-//	ctrl, randomPort := startServer()
-//	defer stopServer(ctrl)
-//	v1_0_0.CheckWorkflows(t, &compliance.Config{
-//		Address:    listenHost,
-//		Port:       randomPort,
-//		OutputJSON: true,
-//    Namespace: namespace,
-//	})
-//}
+func TestWorkflowsOutputJSON(t *testing.T) {
+	ctrl, randomPort := startServer()
+	defer stopServer(ctrl)
+	v1_0_0.CheckWorkflows(t, &compliance.Config{
+		Address:    fmt.Sprintf("http://%s:%s", listenHost, randomPort),
+		OutputJSON: true,
+		Namespace:  namespace,
+	})
+}
 
 // start local server on random open port
 func startServer() (*api.Controller, string) {
