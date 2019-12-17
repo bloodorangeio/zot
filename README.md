@@ -56,7 +56,7 @@ Examples of config files are available in [examples/](examples/) dir.
 # Compliance checks
 
 ```
-bin/zot compliance -H hostIP -P port [-V "all"] [--json]
+bin/zot compliance -H host [-V "all"] [--json]
 ```
 
 # Ecosystem

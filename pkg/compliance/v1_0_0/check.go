@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/smartystreets/goconvey/convey/reporting"
 	"io"
 	"os"
 	"regexp"
@@ -17,6 +16,7 @@ import (
 	godigest "github.com/opencontainers/go-digest"
 	ispec "github.com/opencontainers/image-spec/specs-go/v1"
 	. "github.com/smartystreets/goconvey/convey"
+	"github.com/smartystreets/goconvey/convey/reporting"
 	"gopkg.in/resty.v1"
 )
 
@@ -622,8 +622,8 @@ func outputJSONExit() {
 	os.Stdout = old // restoring the real stdout
 	out := <-outC
 
-	// The output of JSON is combined with regular output, so we look for the
-	// first occurrence of the "{" character and take everything after that
+	// The output of JSON is combined with regular output, so we capture everything between
+	// the special strings reporting.OpenJSON and reporting.CloseJson.
 	rString := fmt.Sprintf("(?s)%s(.*),.?%s", reporting.OpenJson, reporting.CloseJson)
 	re := regexp.MustCompile(rString)
 	matchArray := re.FindStringSubmatch(out)
