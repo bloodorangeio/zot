@@ -53,22 +53,31 @@ func buildAuthUrlString(m map[string]string) string {
 	return authUrl
 }
 
-func getToken(url, method, user, pass string) string {
+func getToken(url, user, pass string) string {
 	authReq := resty.R()
 	authReq.SetBasicAuth(user, pass)
-	authResp, _ := authReq.Execute(method, url)
+	authResp, _ := authReq.Get(url)
 	re := regexp.MustCompile(`"token":"(.+?)"`)
 	token := re.FindStringSubmatch(authResp.String())[1]
 	return token
 }
 
-func (r *ZotRequest) Exec(method string, url string) (*resty.Response, error) {
+func (r *ZotRequest) SplitUserpass(userpass string) (string, string) {
+  if userpass != "" {
+    userAndPass := strings.Split(userpass, ":")
+    return userAndPass[0], userAndPass[1]
+  } else {
+    return "", ""
+  }
+}
+
+func (r *ZotRequest) Exec(method, url, userpass string) (*resty.Response, error) {
 	resp, err := r.Execute(method, url)
 	if resp.StatusCode() == 401 {
 		authInfoMap := getAuthInfoMap(resp.Header())
 		authUrl := buildAuthUrlString(authInfoMap)
-		token := getToken(authUrl, method, "pmengelbert",
-			"IxmSUToStj3xDM7URoAZm+AUBKN9RW9ksFeBnk87s/hQcLDKPPyd+oStCHGuHaw6+1nsQ1RT/QwH+SY136ByrM1t9a5vBrNWDf8dBEr7d7Q=")
+    user, pass := r.SplitUserpass(userpass)
+		token := getToken(authUrl, user, pass)
 		r.SetAuthToken(token)
 		resp, err := r.Execute(method, url)
     return resp, err
@@ -96,7 +105,7 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 	Convey("Make API calls to the controller", t, func(c C) {
 		Convey("Check version", func() {
 			Print("\nCheck version")
-      resp, err := newReq().Exec(resty.MethodGet, baseURL+"/v2/")
+      resp, err := newReq().Exec(resty.MethodGet, baseURL+"/v2/", config.Userpass)
 			Printf("\nResponse code: %v\nResponse body: %v\nResponse Header: %v\n", resp.StatusCode(), resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 200)
@@ -105,7 +114,7 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 		Convey("Get repository catalog", func() {
 			Print("\nGet repository catalog")
 			//resp, err := resty.R().Get(baseURL + "/v2/_catalog")
-      resp, err := newReq().Exec(resty.MethodGet, baseURL + "/v2/_catalog")
+      resp, err := newReq().Exec(resty.MethodGet, baseURL + "/v2/_catalog", config.Userpass)
 			Printf("\nResponse code: %v\nResponse body: %v\nResponse Header: %v\n", resp.StatusCode(), resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 200)
@@ -118,14 +127,14 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 
 			// after newly created upload should succeed
 			//resp, err = resty.R().Post(baseURL + "/v2/z/blobs/uploads/")
-      resp, err = newReq().Exec(resty.MethodPost, baseURL + "/v2/z/blobs/uploads/")
+      resp, err = newReq().Exec(resty.MethodPost, baseURL + "/v2/z/blobs/uploads/", config.Userpass)
 			Printf("\nResponse code: %v\nResponse body: %v\nResponse Header: %v\n", resp.StatusCode(), resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 202)
 
 			// after newly created upload should succeed
 			//resp, err = resty.R().Post(baseURL + "/v2/a/b/c/d/blobs/uploads/")
-      resp, err = newReq().Exec(resty.MethodPost, baseURL + "/v2/a/b/c/d/blobs/uploads/")
+      resp, err = newReq().Exec(resty.MethodPost, baseURL + "/v2/a/b/c/d/blobs/uploads/", config.Userpass)
 			Printf("\nResponse code: %v\nResponse body: %v\nResponse Header: %v\n", resp.StatusCode(), resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 202)
@@ -145,7 +154,7 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 			Print("\nGet images in a repository")
 			// non-existent repository should fail
 			//resp, err := resty.R().Get(baseURL + prefix + "tags/list")
-      resp, err := newReq().Exec(resty.MethodGet, baseURL + prefix + "tags/list")
+      resp, err := newReq().Exec(resty.MethodGet, baseURL + prefix + "tags/list", config.Userpass)
 			Printf("\nResponse code: %v\nResponse body: %v\nResponse Header: %v\n", resp.StatusCode(), resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 404)
@@ -153,13 +162,13 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 
 			// after newly created upload should succeed
 			//resp, err = resty.R().Post(baseURL + prefix + "blobs/uploads/")
-      resp, err = newReq().Exec(resty.MethodPost, baseURL + prefix + "blobs/uploads/")
+      resp, err = newReq().Exec(resty.MethodPost, baseURL + prefix + "blobs/uploads/", config.Userpass)
 			Printf("\nResponse code: %v\nResponse body: %v\nResponse Header: %v\n", resp.StatusCode(), resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 202)
 
 			//resp, err = resty.R().Get(baseURL + prefix + "tags/list")
-      resp, err = newReq().Exec(resty.MethodGet, baseURL + prefix + "tags/list")
+      resp, err = newReq().Exec(resty.MethodGet, baseURL + prefix + "tags/list", config.Userpass)
 			Printf("\nResponse code: %v\nResponse body: %v\nResponse Header: %v\n", resp.StatusCode(), resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 200)
@@ -590,8 +599,8 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 	})
 }
 
-func main() {
-	protocol := "https"
-	baseURL := fmt.Sprintf("%s://%s:%s", protocol, "quay.io", "443")
-	_, _ = newReq().Exec("GET", baseURL+"/v2/")
-}
+//func main() {
+//	protocol := "https"
+//	baseURL := fmt.Sprintf("%s://%s:%s", protocol, "quay.io", "443")
+//	_, _ = newReq().Exec("GET", baseURL+"/v2/")
+//}
