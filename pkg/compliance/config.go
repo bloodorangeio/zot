@@ -7,7 +7,6 @@ type Config struct {
 	Namespace string
 	Userpass  string
 	UseHTTPS  bool
-	Token     string
 }
 
 func NewConfig() *Config {
