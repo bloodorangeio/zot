@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/http"
 	"net/url"
 	"os"
 	"regexp"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/anuvu/zot/pkg/api"
 	"github.com/anuvu/zot/pkg/compliance"
+	"github.com/mitchellh/mapstructure"
 	godigest "github.com/opencontainers/go-digest"
 	ispec "github.com/opencontainers/image-spec/specs-go/v1"
 	. "github.com/smartystreets/goconvey/convey"
@@ -33,9 +35,9 @@ type (
 	Client struct {
 		*resty.Client
 		Config struct {
-			Address string
+			Address   string
 			Namespace string
-			Auth   struct {
+			Auth      struct {
 				Basic struct {
 					Username string
 					Password string
@@ -43,10 +45,28 @@ type (
 			}
 		}
 	}
+
+	authHeader struct {
+		Realm   string
+		Service string
+		Scope   string
+	}
+
+	authInfo struct {
+		Token string `json:"token"`
+	}
 )
 
-func (client *Client) NewRequest() *Request {
+func (resp *Response) IsUnauthorized() bool {
+	return resp.StatusCode() == http.StatusUnauthorized
+}
+
+func (client *Client) NewRequest(method, path string) *Request {
 	restyRequest := client.Client.NewRequest()
+	restyRequest.Method = method
+	path = strings.Replace(path, ":namespace", client.Config.Namespace, -1)
+	url := fmt.Sprintf("%s%s", client.Config.Address, path)
+	restyRequest.URL = url
 	return &Request{restyRequest}
 }
 
@@ -59,58 +79,58 @@ func (req *Request) Execute(method, url string) (*Response, error) {
 	return resp, err
 }
 
-func (client *Client) Do(method, path string) (*Response, error) {
-	path = strings.Replace(path, ":namespace", client.Config.Namespace, -1)
-	url := fmt.Sprintf("%s%s", client.Config.Address, path)
-
-	req := client.NewRequest()
-	resp, err := req.Execute(method, url)
+func (client *Client) Do(req *Request) (*Response, error) {
+	resp, err := req.Execute(req.Method, req.URL)
 	if err != nil {
 		return nil, err
 	}
 
-	if resp.StatusCode() == 401 {
-		authInfoMap := getAuthInfoMap(resp.Header())
-		authUrl := buildAuthUrlString(authInfoMap)
-		token := getToken(authUrl, client.Config.Auth.Basic.Username, client.Config.Auth.Basic.Password)
-		client.SetAuthToken(token)
-		resp, err = req.Execute(method, url)
-		return resp, err
+	if resp.IsUnauthorized() {
+		resp, err = client.retryRequestWithAuth(req, resp)
 	}
 
 	return resp, err
 }
 
-func getAuthInfoMap(header map[string][]string) map[string]string {
-	authInfo := header["Www-Authenticate"][0]
+func (client *Client) retryRequestWithAuth(originalRequest *Request, originalResponse *Response) (*Response, error) {
+	authHeaderRaw := originalResponse.Header().Get("Www-Authenticate")
+	if authHeaderRaw == "" {
+		return originalResponse, nil
+	}
+
+	h := parseAuthHeader(authHeaderRaw)
+
+	req := resty.R()
+	req.SetQueryParam("service", h.Service)
+	req.SetQueryParam("scope", h.Scope)
+	req.SetHeader("Accept", "application/json")
+	req.SetBasicAuth(client.Config.Auth.Basic.Username, client.Config.Auth.Basic.Password)
+	authResp, err := req.Execute(resty.MethodGet, h.Realm)
+	if err != nil {
+		return nil, err
+	}
+
+	var info authInfo
+	bodyBytes := authResp.Body()
+	err = json.Unmarshal(bodyBytes, &info)
+	if err != nil {
+		return nil, err
+	}
+
+	originalRequest.SetAuthToken(info.Token)
+	return originalRequest.Execute(originalRequest.Method, originalRequest.URL)
+}
+
+func parseAuthHeader(authHeaderRaw string) *authHeader {
 	re := regexp.MustCompile(`([a-zA-z]+)="(.+?)"`)
-	ary := re.FindAllStringSubmatch(authInfo, -1)
+	matches := re.FindAllStringSubmatch(authHeaderRaw, -1)
 	m := make(map[string]string)
-	for i := 0; i < len(ary); i++ {
-		m[ary[i][1]] = ary[i][2]
+	for i := 0; i < len(matches); i++ {
+		m[matches[i][1]] = matches[i][2]
 	}
-	return m
-}
-
-func buildAuthUrlString(m map[string]string) string {
-	realm := m["realm"]
-	delete(m, "realm")
-	var prms []string
-	for k, v := range m {
-		prms = append(prms, fmt.Sprintf("%s=%s", k, v))
-	}
-	paramString := strings.Join(prms, "&")
-	authUrl := fmt.Sprintf("%s?%s", realm, paramString)
-	return authUrl
-}
-
-func getToken(url, user, pass string) string {
-	authReq := resty.R()
-	authReq.SetBasicAuth(user, pass)
-	authResp, _ := authReq.Get(url)
-	re := regexp.MustCompile(`"token":"(.+?)"`)
-	token := re.FindStringSubmatch(authResp.String())[1]
-	return token
+	var h authHeader
+	mapstructure.Decode(m, &h)
+	return &h
 }
 
 func CheckWorkflows(t *testing.T, config *compliance.Config) {
@@ -233,7 +253,7 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 			content := []byte("this is a blob")
 			digest := godigest.FromBytes(content)
 			So(digest, ShouldNotBeNil)
-			resp, err = client.Do(resty.MethodPut,  u.Path)
+			resp, err = client.Do(resty.MethodPut, u.Path)
 			//resp, err = newReq().Exec(resty.MethodPut, config.Address + loc)
 			Printf("\nResponse code: %v\nResponse body: %v\nResponse Header: %v\n", resp.StatusCode(), resp, resp.Header())
 			So(err, ShouldBeNil)
@@ -260,13 +280,13 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 			So(respx.Header().Get("Content-Length"), ShouldEqual, "0")
 			So(respx.Header().Get(api.DistContentDigestKey), ShouldNotBeEmpty)
 			// upload reference should now be removed
-			resp, err = client.Do(resty.MethodGet,  loc)
+			resp, err = client.Do(resty.MethodGet, loc)
 			//resp, err = newReq().Exec(resty.MethodGet, config.Address + loc)
 			Printf("\nResponse code: %v\nResponse body: %v\nResponse Header: %v\n", resp.StatusCode(), resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 404)
 			// blob reference should be accessible
-			resp, err = client.Do(resty.MethodGet,  blobLoc)
+			resp, err = client.Do(resty.MethodGet, blobLoc)
 			Printf("\nResponse code: %v\nResponse body: %v\nResponse Header: %v\n", resp.StatusCode(), resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 200)
@@ -274,19 +294,19 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 
 		Convey("Monolithic blob upload with multiple name components", func() {
 			Print("\nMonolithic blob upload with multiple name components")
-			resp, err := client.Do(resty.MethodPost,  "1/repo2/repo3/blobs/uploads/")
+			resp, err := client.Do(resty.MethodPost, "1/repo2/repo3/blobs/uploads/")
 			Printf("\nResponse code: %v\nResponse body: %v\nResponse Header: %v\n", resp.StatusCode(), resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 202)
 			loc := resp.Header().Get("Location")
 			So(loc, ShouldNotBeEmpty)
 
-			resp, err = client.Do(resty.MethodGet,  loc)
+			resp, err = client.Do(resty.MethodGet, loc)
 			Printf("\nResponse code: %v\nResponse body: %v\nResponse Header: %v\n", resp.StatusCode(), resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 204)
 
-			resp, err = client.Do(resty.MethodGet,  "1/repo2/repo3/tags/list")
+			resp, err = client.Do(resty.MethodGet, "1/repo2/repo3/tags/list")
 			Printf("\nResponse code: %v\nResponse body: %v\nResponse Header: %v\n", resp.StatusCode(), resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 200)
@@ -296,7 +316,7 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 			content := []byte("this is a blob")
 			digest := godigest.FromBytes(content)
 			So(digest, ShouldNotBeNil)
-			resp, err = client.Do(resty.MethodPut,  loc)
+			resp, err = client.Do(resty.MethodPut, loc)
 			Printf("\nResponse code: %v\nResponse body: %v\nResponse Header: %v\n", resp.StatusCode(), resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 400)
@@ -322,12 +342,12 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 			So(respx.Header().Get("Content-Length"), ShouldEqual, "0")
 			So(respx.Header().Get(api.DistContentDigestKey), ShouldNotBeEmpty)
 			// upload reference should now be removed
-			resp, err = client.Do(resty.MethodGet,  loc)
+			resp, err = client.Do(resty.MethodGet, loc)
 			Printf("\nResponse code: %v\nResponse body: %v\nResponse Header: %v\n", resp.StatusCode(), resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 404)
 			// blob reference should be accessible
-			resp, err = client.Do(resty.MethodGet,  blobLoc)
+			resp, err = client.Do(resty.MethodGet, blobLoc)
 			Printf("\nResponse code: %v\nResponse body: %v\nResponse Header: %v\n", resp.StatusCode(), resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 200)
@@ -335,7 +355,7 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 
 		Convey("Chunked blob upload", func() {
 			Print("\nChunked blob upload")
-			resp, err := client.Do(resty.MethodPost,  "/v2/blobs/uploads/")
+			resp, err := client.Do(resty.MethodPost, "/v2/blobs/uploads/")
 			Printf("\nResponse code: %v\nResponse body: %v\nResponse Header: %v\n", resp.StatusCode(), resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 202)
@@ -357,7 +377,7 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 			So(respx.StatusCode(), ShouldEqual, 202)
 
 			// check progress
-			resp, err = client.Do(resty.MethodGet,  loc)
+			resp, err = client.Do(resty.MethodGet, loc)
 			Printf("\nResponse code: %v\nResponse body: %v\nResponse Header: %v\n", resp.StatusCode(), resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 204)
@@ -397,12 +417,12 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 			So(respx.Header().Get("Content-Length"), ShouldEqual, "0")
 			So(respx.Header().Get(api.DistContentDigestKey), ShouldNotBeEmpty)
 			// upload reference should now be removed
-			resp, err = client.Do(resty.MethodGet,  loc)
+			resp, err = client.Do(resty.MethodGet, loc)
 			Printf("\nResponse code: %v\nResponse body: %v\nResponse Header: %v\n", resp.StatusCode(), resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 404)
 			// blob reference should be accessible
-			resp, err = client.Do(resty.MethodGet,  blobLoc)
+			resp, err = client.Do(resty.MethodGet, blobLoc)
 			Printf("\nResponse code: %v\nResponse body: %v\nResponse Header: %v\n", resp.StatusCode(), resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 200)
@@ -410,7 +430,7 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 
 		Convey("Chunked blob upload with multiple name components", func() {
 			Print("\nChunked blob upload with multiple name components")
-			resp, err := client.Do(resty.MethodPost,  "4/repo5/repo6/blobs/uploads/")
+			resp, err := client.Do(resty.MethodPost, "4/repo5/repo6/blobs/uploads/")
 			Printf("\nResponse code: %v\nResponse body: %v\nResponse Header: %v\n", resp.StatusCode(), resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 202)
@@ -432,7 +452,7 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 			So(respx.StatusCode(), ShouldEqual, 202)
 
 			// check progress
-			resp, err = client.Do(resty.MethodGet,  loc)
+			resp, err = client.Do(resty.MethodGet, loc)
 			Printf("\nResponse code: %v\nResponse body: %v\nResponse Header: %v\n", resp.StatusCode(), resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 204)
@@ -472,12 +492,12 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 			So(respx.Header().Get("Content-Length"), ShouldEqual, "0")
 			So(respx.Header().Get(api.DistContentDigestKey), ShouldNotBeEmpty)
 			// upload reference should now be removed
-			resp, err = client.Do(resty.MethodGet,  loc)
+			resp, err = client.Do(resty.MethodGet, loc)
 			Printf("\nResponse code: %v\nResponse body: %v\nResponse Header: %v\n", resp.StatusCode(), resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 404)
 			// blob reference should be accessible
-			resp, err = client.Do(resty.MethodGet,  blobLoc)
+			resp, err = client.Do(resty.MethodGet, blobLoc)
 			Printf("\nResponse code: %v\nResponse body: %v\nResponse Header: %v\n", resp.StatusCode(), resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 200)
@@ -486,7 +506,7 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 		Convey("Create and delete uploads", func() {
 			Print("\nCreate and delete uploads")
 			// create a upload
-			resp, err := client.Do(resty.MethodPost,   "blobs/uploads/")
+			resp, err := client.Do(resty.MethodPost, "blobs/uploads/")
 			Printf("\nResponse code: %v\nResponse body: %v\nResponse Header: %v\n", resp.StatusCode(), resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 202)
@@ -494,7 +514,7 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 			So(loc, ShouldNotBeEmpty)
 
 			// delete this upload
-			resp, err = client.Do(resty.MethodDelete,  loc)
+			resp, err = client.Do(resty.MethodDelete, loc)
 			Printf("\nResponse code: %v\nResponse body: %v\nResponse Header: %v\n", resp.StatusCode(), resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 200)
@@ -503,7 +523,7 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 		Convey("Create and delete blobs", func() {
 			Print("\nCreate and delete blobs")
 			// create a upload
-			resp, err := client.Do(resty.MethodPost,   "blobs/uploads/")
+			resp, err := client.Do(resty.MethodPost, "blobs/uploads/")
 			Printf("\nResponse code: %v\nResponse body: %v\nResponse Header: %v\n", resp.StatusCode(), resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 202)
@@ -524,7 +544,7 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 			So(respx.Header().Get(api.DistContentDigestKey), ShouldNotBeEmpty)
 
 			// delete this blob
-			resp, err = client.Do(resty.MethodDelete,  blobLoc)
+			resp, err = client.Do(resty.MethodDelete, blobLoc)
 			Printf("\nResponse code: %v\nResponse body: %v\nResponse Header: %v\n", resp.StatusCode(), resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 202)
@@ -534,14 +554,14 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 		Convey("Manifests", func() {
 			Print("\nManifests")
 			// create a blob/layer
-			resp, err := client.Do(resty.MethodPost,  "blobs/uploads/")
+			resp, err := client.Do(resty.MethodPost, "blobs/uploads/")
 			Printf("\nResponse code: %v\nResponse body: %v\nResponse Header: %v\n", resp.StatusCode(), resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 202)
 			loc := resp.Header().Get("Location")
 			So(loc, ShouldNotBeEmpty)
 
-			resp, err = client.Do(resty.MethodGet,  loc)
+			resp, err = client.Do(resty.MethodGet, loc)
 			Printf("\nResponse code: %v\nResponse body: %v\nResponse Header: %v\n", resp.StatusCode(), resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 204)
@@ -575,53 +595,53 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 			So(d, ShouldEqual, digest.String())
 
 			// check/get by tag
-			resp, err = client.Do(resty.MethodHead,  "manifests/test:1.0")
+			resp, err = client.Do(resty.MethodHead, "manifests/test:1.0")
 			Printf("\nResponse code: %v\nResponse body: %v\nResponse Header: %v\n", resp.StatusCode(), resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 200)
-			resp, err = client.Do(resty.MethodGet,  "manifests/test:1.0")
+			resp, err = client.Do(resty.MethodGet, "manifests/test:1.0")
 			Printf("\nResponse code: %v\nResponse body: %v\nResponse Header: %v\n", resp.StatusCode(), resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 200)
 			So(resp.Body(), ShouldNotBeEmpty)
 			// check/get by reference
-			resp, err = client.Do(resty.MethodHead,  "manifests/" + digest.String())
+			resp, err = client.Do(resty.MethodHead, "manifests/"+digest.String())
 			Printf("\nResponse code: %v\nResponse body: %v\nResponse Header: %v\n", resp.StatusCode(), resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 200)
-			resp, err = client.Do(resty.MethodGet,  "manifests/" + digest.String())
+			resp, err = client.Do(resty.MethodGet, "manifests/"+digest.String())
 			Printf("\nResponse code: %v\nResponse body: %v\nResponse Header: %v\n", resp.StatusCode(), resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 200)
 			So(resp.Body(), ShouldNotBeEmpty)
 
 			// delete manifest
-			resp, err = client.Do(resty.MethodDelete,  "manifests/test:1.0")
+			resp, err = client.Do(resty.MethodDelete, "manifests/test:1.0")
 			Printf("\nResponse code: %v\nResponse body: %v\nResponse Header: %v\n", resp.StatusCode(), resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 200)
 			// delete again should fail
-			resp, err = client.Do(resty.MethodDelete,  "manifests/" + digest.String())
+			resp, err = client.Do(resty.MethodDelete, "manifests/"+digest.String())
 			Printf("\nResponse code: %v\nResponse body: %v\nResponse Header: %v\n", resp.StatusCode(), resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 404)
 
 			// check/get by tag
-			resp, err = client.Do(resty.MethodHead,  "manifests/test:1.0")
+			resp, err = client.Do(resty.MethodHead, "manifests/test:1.0")
 			Printf("\nResponse code: %v\nResponse body: %v\nResponse Header: %v\n", resp.StatusCode(), resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 404)
-			resp, err = client.Do(resty.MethodGet,  "manifests/test:1.0")
+			resp, err = client.Do(resty.MethodGet, "manifests/test:1.0")
 			Printf("\nResponse code: %v\nResponse body: %v\nResponse Header: %v\n", resp.StatusCode(), resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 404)
 			So(resp.Body(), ShouldNotBeEmpty)
 			// check/get by reference
-			resp, err = client.Do(resty.MethodHead,  "manifests/" + digest.String())
+			resp, err = client.Do(resty.MethodHead, "manifests/"+digest.String())
 			Printf("\nResponse code: %v\nResponse body: %v\nResponse Header: %v\n", resp.StatusCode(), resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 404)
-			resp, err = client.Do(resty.MethodGet,  "manifests/" + digest.String())
+			resp, err = client.Do(resty.MethodGet, "manifests/"+digest.String())
 			Printf("\nResponse code: %v\nResponse body: %v\nResponse Header: %v\n", resp.StatusCode(), resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 404)
