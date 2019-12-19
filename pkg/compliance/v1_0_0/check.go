@@ -9,6 +9,7 @@ import (
 	ispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"io"
 	"net/url"
+	"path"
 
 	//"net/url"
 	"os"
@@ -18,6 +19,7 @@ import (
 	"github.com/anuvu/zot/pkg/api"
 	"github.com/anuvu/zot/pkg/compliance"
 	"github.com/bloodorangeio/reggie"
+
 	//godigest "github.com/opencontainers/go-digest"
 	//ispec "github.com/opencontainers/image-spec/specs-go/v1"
 	. "github.com/smartystreets/goconvey/convey"
@@ -49,7 +51,7 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 	Convey("Make API calls to the controller", t, func(c C) {
 		Convey("Check version", func() {
 			Print("\nCheck version")
-			req := client.NewRequest(resty.MethodGet, "/v2/")
+			req := client.NewRequest(reggie.GET, "/v2/")
 			resp, err := client.Do(req)
 			Printf("\nResponse code: %v\nResponse body: %v\nResponse Header: %v\n", resp.StatusCode(), resp, resp.Header())
 			So(err, ShouldBeNil)
@@ -58,7 +60,7 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 
 		Convey("Get repository catalog", func() {
 			Print("\nGet repository catalog")
-			req := client.NewRequest(resty.MethodGet, "/v2/_catalog")
+			req := client.NewRequest(reggie.GET, "/v2/_catalog")
 			resp, err := client.Do(req)
 			Printf("\nResponse code: %v\nResponse body: %v\nResponse Header: %v\n", resp.StatusCode(), resp, resp.Header())
 			So(err, ShouldBeNil)
@@ -71,14 +73,14 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 			//So(len(repoList.Repositories), ShouldEqual, 0)
 
 			// after newly created upload should succeed
-			req = client.NewRequest(resty.MethodPost, "/v2/:namespace/blobs/uploads/")
+			req = client.NewRequest(reggie.POST, "/v2/:name/blobs/uploads/")
 			resp, err = client.Do(req)
 			Printf("\nResponse code: %v\nResponse body: %v\nResponse Header: %v\n", resp.StatusCode(), resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 202)
 
 			// after newly created upload should succeed
-			//resp, err = client.Do(resty.MethodPost, "/v2/a/b/c/d/blobs/uploads/")
+			//resp, err = client.Do(reggie.POST, "/v2/a/b/c/d/blobs/uploads/")
 			//Printf("\nResponse code: %v\nResponse body: %v\nResponse Header: %v\n", resp.StatusCode(), resp, resp.Header())
 			//So(err, ShouldBeNil)
 			//So(resp.StatusCode(), ShouldEqual, 202)
@@ -98,7 +100,7 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 		Convey("Get images in a repository", func() {
 			Print("\nGet images in a repository")
 			// non-existent repository should fail
-			req := client.NewRequest(resty.MethodGet, "/v2/this/cannot/exist/tags/list")
+			req := client.NewRequest(reggie.GET, "/v2/this/cannot/exist/tags/list")
 			resp, err := client.Do(req)
 			Printf("\nResponse code: %v\nResponse body: %v\nResponse Header: %v\n", resp.StatusCode(), resp, resp.Header())
 			So(err, ShouldBeNil)
@@ -107,13 +109,13 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 
 			//TODO: Check that number of blobs has increased by 1 after upload
 			// after newly created upload should succeed
-			req = client.NewRequest(resty.MethodPost, "/v2/:namespace/blobs/uploads/")
+			req = client.NewRequest(reggie.POST, "/v2/:name/blobs/uploads/")
 			resp, err = client.Do(req)
 			Printf("\nResponse code: %v\nResponse body: %v\nResponse Header: %v\n", resp.StatusCode(), resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 202)
 
-			req = client.NewRequest(resty.MethodGet, "/v2/:namespace/tags/list")
+			req = client.NewRequest(reggie.GET, "/v2/:name/tags/list")
 			resp, err = client.Do(req)
 			Printf("\nResponse code: %v\nResponse body: %v\nResponse Header: %v\n", resp.StatusCode(), resp, resp.Header())
 			So(err, ShouldBeNil)
@@ -123,28 +125,26 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 
 		Convey("Monolithic blob upload", func() {
 			Print("\nMonolithic blob upload")
-			req := client.NewRequest(resty.MethodPost, "/v2/:namespace/blobs/uploads/")
+			req := client.NewRequest(reggie.POST, "/v2/:name/blobs/uploads/")
 			resp, err := client.Do(req)
-			//resp, err := newReq().Exec(resty.MethodPost, config.Address + prefix + "blobs/uploads/")
 			Printf("\nResponse code: %v\nResponse body: %v\nResponse Header: %v\n", resp.StatusCode(), resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 202)
 			loc := resp.Header().Get("Location")
-			So(loc, ShouldNotBeEmpty)
 			u, err := url.Parse(loc)
+			uuid := path.Base(u.Path)
+			So(loc, ShouldNotBeEmpty)
 			So(err, ShouldBeNil)
 
 			//TODO:
-			req = client.NewRequest(resty.MethodGet, u.Path)
+			req = client.NewRequest(reggie.GET, "/v2/:name/blobs/uploads/:uuid", reggie.WithUUID(uuid))
 			resp, err = client.Do(req)
-			//resp, err = newReq().Exec(resty.MethodGet, config.Address + loc)
 			Printf("\nResponse code: %v\nResponse body: %v\nResponse Header: %v\n", resp.StatusCode(), resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 204)
 
-			req = client.NewRequest(resty.MethodGet, "/v2/:namespace/tags/list")
+			req = client.NewRequest(reggie.GET, "/v2/:name/tags/list")
 			resp, err = client.Do(req)
-			//resp, err = newReq().Exec(resty.MethodGet, config.Address + prefix + "tags/list")
 			Printf("\nResponse code: %v\nResponse body: %v\nResponse Header: %v\n", resp.StatusCode(), resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 200)
@@ -154,28 +154,29 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 			content := []byte("this is a blob")
 			digest := godigest.FromBytes(content)
 			So(digest, ShouldNotBeNil)
-			req = client.NewRequest(resty.MethodPut, u.Path)
+			req = client.NewRequest(reggie.PUT, "/v2/:name/blobs/uploads/:uuid", reggie.WithUUID(uuid))
 			resp, err = client.Do(req)
-			//resp, err = newReq().Exec(resty.MethodPut, config.Address + loc)
 			Printf("\nResponse code: %v\nResponse body: %v\nResponse Header: %v\n", resp.StatusCode(), resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 400)
 			// without the Content-Length should fail
-			req = client.NewRequest(resty.MethodPut, fmt.Sprintf("%s?digest=%s", u.Path, digest))
+			req = client.NewRequest(reggie.PUT, "/v2/:name/blobs/uploads/:uuid", reggie.WithUUID(uuid))
+			respx, err := resty.R().SetQueryParam("digest", digest.String()).Put(client.HostURL + "v2/1/repo2/repo3/blobs/uploads/" + uuid)
+			req.SetQueryParam("digest", digest.String())
 			resp, err = client.Do(req)
 			Printf("\nResponse code: %v\nResponse body: %v\nResponse Header: %v\n", resp.StatusCode(), resp, resp.Header())
 			So(err, ShouldBeNil)
-			So(resp.StatusCode(), ShouldEqual, 400)
+			So(respx.StatusCode(), ShouldEqual, 400)
 			// without any data to send, should fail
-			req = client.NewRequest(resty.MethodPut, u.Path)
-			req.SetQueryParam("digest", digest.String())
+			req = client.NewRequest(reggie.PUT, "/v2/:name/blobs/uploads/:uuid", reggie.WithUUID(uuid))
+			//req.SetQueryParam("digest", digest.String())
 			req.SetHeader("Content-Type", "application/octet-stream")
 			resp, err = client.Do(req)
 			Printf("\nResponse code: %v\nResponse body: %v\nResponse Header: %v\n", resp.StatusCode(), resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 400)
 			// monolithic blob upload: success
-			req = client.NewRequest(resty.MethodPut, u.Path)
+			req = client.NewRequest(reggie.PUT, "/v2/:name/blobs/uploads/:uuid", reggie.WithUUID(uuid))
 			req.SetQueryParam("digest", digest.String())
 			req.SetHeader("Content-Type", "application/octet-stream")
 			req.SetBody(content)
@@ -188,15 +189,15 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 			So(resp.Header().Get("Content-Length"), ShouldEqual, "0")
 			So(resp.Header().Get(api.DistContentDigestKey), ShouldNotBeEmpty)
 			// upload reference should now be removed
-			req = client.NewRequest(resty.MethodGet, u.Path)
+			req = client.NewRequest(reggie.GET, "/v2/:name/blobs/uploads/:uuid", reggie.WithUUID(uuid))
 			resp, err = client.Do(req)
-			//resp, err = newReq().Exec(resty.MethodGet, config.Address + loc)
 			Printf("\nResponse code: %v\nResponse body: %v\nResponse Header: %v\n", resp.StatusCode(), resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 404)
 			// blob reference should be accessible
-			u, err = url.Parse(blobLoc)
-			req = client.NewRequest(resty.MethodGet, u.Path)
+			bu, err := url.Parse(blobLoc)
+			blobDigest := path.Base(bu.Path)
+			req = client.NewRequest(reggie.GET, "/v2/:name/blobs/:digest", reggie.WithDigest(blobDigest))
 			resp, err = client.Do(req)
 			Printf("\nResponse code: %v\nResponse body: %v\nResponse Header: %v\n", resp.StatusCode(), resp, resp.Header())
 			So(err, ShouldBeNil)
@@ -205,22 +206,23 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 
 		Convey("Monolithic blob upload with multiple name components", func() {
 			Print("\nMonolithic blob upload with multiple name components")
-			req := client.NewRequest(resty.MethodPost, "/v2/1/repo2/repo3/blobs/uploads/")
+			req := client.NewRequest(reggie.POST, "/v2/1/repo2/repo3/blobs/uploads/")
 			resp, err := client.Do(req)
 			Printf("\nResponse code: %v\nResponse body: %v\nResponse Header: %v\n", resp.StatusCode(), resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 202)
 			loc := resp.Header().Get("Location")
 			u, err := url.Parse(loc)
+			uuid := path.Base(u.Path)
 			So(loc, ShouldNotBeEmpty)
 
-			req = client.NewRequest(resty.MethodGet, u.Path)
+			req = client.NewRequest(reggie.GET, "/v2/1/repo2/repo3/blobs/uploads/:uuid", reggie.WithUUID(uuid))
 			resp, err = client.Do(req)
 			Printf("\nResponse code: %v\nResponse body: %v\nResponse Header: %v\n", resp.StatusCode(), resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 204)
 
-			req = client.NewRequest(resty.MethodGet, "/v2/1/repo2/repo3/tags/list")
+			req = client.NewRequest(reggie.GET, "/v2/1/repo2/repo3/tags/list")
 			resp, err = client.Do(req)
 			Printf("\nResponse code: %v\nResponse body: %v\nResponse Header: %v\n", resp.StatusCode(), resp, resp.Header())
 			So(err, ShouldBeNil)
@@ -231,20 +233,20 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 			content := []byte("this is a blob")
 			digest := godigest.FromBytes(content)
 			So(digest, ShouldNotBeNil)
-			req = client.NewRequest(resty.MethodPut, u.Path)
+			req = client.NewRequest(reggie.PUT, "/v2/1/repo2/repo3/blobs/uploads/:uuid", reggie.WithUUID(uuid))
 			resp, err = client.Do(req)
 			Printf("\nResponse code: %v\nResponse body: %v\nResponse Header: %v\n", resp.StatusCode(), resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 400)
 			// without the Content-Length should fail
-			req = client.NewRequest(resty.MethodPut, u.Path)
+			req = client.NewRequest(reggie.PUT, "/v2/1/repo2/repo3/blobs/uploads/:uuid", reggie.WithUUID(uuid))
 			req.SetQueryParam("digest", digest.String())
 			resp, err = client.Do(req)
 			Printf("\nResponse code: %v\nResponse body: %v\nResponse Header: %v\n", resp.StatusCode(), resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 400)
 			// without any data to send, should fail
-			req = client.NewRequest(resty.MethodPut, u.Path)
+			req = client.NewRequest(reggie.PUT, "/v2/1/repo2/repo3/blobs/uploads/:uuid", reggie.WithUUID(uuid))
 			req.SetQueryParam("digest", digest.String())
 			req.SetHeader("Content-Type", "application/octet-stream")
 			resp, err = client.Do(req)
@@ -252,7 +254,7 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 400)
 			// monolithic blob upload: success
-			req = client.NewRequest(resty.MethodPut, u.Path)
+			req = client.NewRequest(reggie.PUT, "/v2/1/repo2/repo3/blobs/uploads/:uuid", reggie.WithUUID(uuid))
 			req.SetQueryParam("digest", digest.String())
 			req.SetHeader("Content-Type", "application/octet-stream")
 			req.SetBody(content)
@@ -265,14 +267,15 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 			So(resp.Header().Get("Content-Length"), ShouldEqual, "0")
 			So(resp.Header().Get(api.DistContentDigestKey), ShouldNotBeEmpty)
 			// upload reference should now be removed
-			req = client.NewRequest(resty.MethodGet, u.Path)
+			req = client.NewRequest(reggie.GET, "/v2/1/repo2/repo3/blobs/uploads/:uuid", reggie.WithUUID(uuid))
 			resp, err = client.Do(req)
 			Printf("\nResponse code: %v\nResponse body: %v\nResponse Header: %v\n", resp.StatusCode(), resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 404)
-			u, err = url.Parse(blobLoc)
+			bu, err := url.Parse(blobLoc)
+			blobDigest := path.Base(bu.Path)
 			// blob reference should be accessible
-			req = client.NewRequest(resty.MethodGet, u.Path)
+			req = client.NewRequest(reggie.GET, "/v2/1/repo2/repo3/blobs/:digest", reggie.WithDigest(blobDigest))
 			resp, err = client.Do(req)
 			Printf("\nResponse code: %v\nResponse body: %v\nResponse Header: %v\n", resp.StatusCode(), resp, resp.Header())
 			So(err, ShouldBeNil)
@@ -281,13 +284,14 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 
 		Convey("Chunked blob upload", func() {
 			Print("\nChunked blob upload")
-			req := client.NewRequest(resty.MethodPost, "/v2/:namespace/blobs/uploads/")
+			req := client.NewRequest(reggie.POST, "/v2/:name/blobs/uploads/")
 			resp, err := client.Do(req)
 			Printf("\nResponse code: %v\nResponse body: %v\nResponse Header: %v\n", resp.StatusCode(), resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 202)
 			loc := resp.Header().Get("Location")
 			u, err := url.Parse(loc)
+			uuid := path.Base(u.Path)
 			So(loc, ShouldNotBeEmpty)
 
 			var buf bytes.Buffer
@@ -298,7 +302,7 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 
 			//write first chunk
 			contentRange := fmt.Sprintf("%d-%d", 0, len(chunk1))
-			req = client.NewRequest(resty.MethodPatch, u.Path)
+			req = client.NewRequest(reggie.PATCH, "/v2/:name/blobs/uploads/:uuid", reggie.WithUUID(uuid))
 			req.SetHeader("Content-Type", "application/octet-stream")
 			req.SetHeader("Content-Range", contentRange)
 			req.SetBody(chunk1)
@@ -308,7 +312,7 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 			So(resp.StatusCode(), ShouldEqual, 202)
 
 			// check progress
-			req = client.NewRequest(resty.MethodGet, u.Path)
+			req = client.NewRequest(reggie.GET, "/v2/:name/blobs/uploads/:uuid", reggie.WithUUID(uuid))
 			resp, err = client.Do(req)
 			Printf("\nResponse code: %v\nResponse body: %v\nResponse Header: %v\n", resp.StatusCode(), resp, resp.Header())
 			So(err, ShouldBeNil)
@@ -319,7 +323,7 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 
 			// write same chunk should fail
 			contentRange = fmt.Sprintf("%d-%d", 0, len(chunk1))
-			req = client.NewRequest(resty.MethodPatch, u.Path)
+			req = client.NewRequest(reggie.PATCH, "/v2/:name/blobs/uploads/:uuid", reggie.WithUUID(uuid))
 			req.SetHeader("Content-Type", "application/octet-stream")
 			req.SetHeader("Content-Range", contentRange)
 			req.SetBody(chunk1)
@@ -339,7 +343,7 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 
 			// write final chunk
 			contentRange = fmt.Sprintf("%d-%d", len(chunk1), len(buf.Bytes()))
-			req = client.NewRequest(resty.MethodPut, u.Path)
+			req = client.NewRequest(reggie.PUT, "/v2/:name/blobs/uploads/:uuid", reggie.WithUUID(uuid))
 			req.SetQueryParam("digest", digest.String())
 			req.SetHeader("Content-Range", contentRange)
 			req.SetHeader("Content-Type", "application/octet-stream")
@@ -350,19 +354,20 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 			So(resp.StatusCode(), ShouldEqual, 201)
 			blobLoc := resp.Header().Get("Location")
 			bu, err := url.Parse(blobLoc)
+			blobDigest := path.Base(bu.Path)
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 201)
 			So(blobLoc, ShouldNotBeEmpty)
 			So(resp.Header().Get("Content-Length"), ShouldEqual, "0")
 			So(resp.Header().Get(api.DistContentDigestKey), ShouldNotBeEmpty)
 			// upload reference should now be removed
-			req = client.NewRequest(resty.MethodGet, u.Path)
+			req = client.NewRequest(reggie.GET, "/v2/:name/blobs/uploads/:uuid", reggie.WithUUID(uuid))
 			resp, err = client.Do(req)
 			Printf("\nResponse code: %v\nResponse body: %v\nResponse Header: %v\n", resp.StatusCode(), resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 404)
 			// blob reference should be accessible
-			req = client.NewRequest(resty.MethodGet, bu.Path)
+			req = client.NewRequest(reggie.GET, "/v2/:name/blobs/:digest", reggie.WithDigest(blobDigest))
 			resp, err = client.Do(req)
 			Printf("\nResponse code: %v\nResponse body: %v\nResponse Header: %v\n", resp.StatusCode(), resp, resp.Header())
 			So(err, ShouldBeNil)
@@ -371,7 +376,7 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 
 		Convey("Chunked blob upload with multiple name components", func() {
 			Print("\nChunked blob upload with multiple name components")
-			req := client.NewRequest(resty.MethodPost, "/v2/:namespace/4/repo5/repo6/blobs/uploads/")
+			req := client.NewRequest(reggie.POST, "/v2/:name/4/repo5/repo6/blobs/uploads/")
 			resp, err := client.Do(req)
 			Printf("\nResponse code: %v\nResponse body: %v\nResponse Header: %v\n", resp.StatusCode(), resp, resp.Header())
 			So(err, ShouldBeNil)
@@ -379,6 +384,7 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 			loc := resp.Header().Get("Location")
 			u, err := url.Parse(loc)
 			So(loc, ShouldNotBeEmpty)
+			uuid := path.Base(u.Path)
 
 			var buf bytes.Buffer
 			chunk1 := []byte("this is the first chunk")
@@ -388,7 +394,7 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 
 			// write first chunk
 			contentRange := fmt.Sprintf("%d-%d", 0, len(chunk1))
-			req = client.NewRequest(resty.MethodPatch, u.Path)
+			req = client.NewRequest(reggie.PATCH, "/v2/:name/4/repo5/repo6/blobs/uploads/:uuid", reggie.WithUUID(uuid))
 			req.SetHeader("Content-Type", "application/octet-stream")
 			req.SetHeader("Content-Range", contentRange)
 			req.SetBody(chunk1)
@@ -398,7 +404,7 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 			So(resp.StatusCode(), ShouldEqual, 202)
 
 			// check progress
-			req = client.NewRequest(resty.MethodGet, u.Path)
+			req = client.NewRequest(reggie.GET, "/v2/:name/4/repo5/repo6/blobs/uploads/:uuid", reggie.WithUUID(uuid))
 			resp, err = client.Do(req)
 			Printf("\nResponse code: %v\nResponse body: %v\nResponse Header: %v\n", resp.StatusCode(), resp, resp.Header())
 			So(err, ShouldBeNil)
@@ -409,7 +415,7 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 
 			// write same chunk should fail
 			contentRange = fmt.Sprintf("%d-%d", 0, len(chunk1))
-			req = client.NewRequest(resty.MethodPatch, u.Path)
+			req = client.NewRequest(reggie.PATCH, "/v2/:name/4/repo5/repo6/blobs/uploads/:uuid", reggie.WithUUID(uuid))
 			req.SetHeader("Content-Type", "application/octet-stream")
 			req.SetHeader("Content-Range", contentRange)
 			req.SetBody(chunk1)
@@ -429,7 +435,7 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 
 			// write final chunk
 			contentRange = fmt.Sprintf("%d-%d", len(chunk1), len(buf.Bytes()))
-			req = client.NewRequest(resty.MethodPut, u.Path)
+			req = client.NewRequest(reggie.PUT, "/v2/:name/4/repo5/repo6/blobs/uploads/:uuid", reggie.WithUUID(uuid))
 			req.SetQueryParam("digest", digest.String())
 			req.SetHeader("Content-Range", contentRange)
 			req.SetHeader("Content-Type", "application/octet-stream")
@@ -440,19 +446,20 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 			So(resp.StatusCode(), ShouldEqual, 201)
 			blobLoc := resp.Header().Get("Location")
 			bu, err := url.Parse(blobLoc)
+			blobDigest := path.Base(bu.Path)
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 201)
 			So(blobLoc, ShouldNotBeEmpty)
 			So(resp.Header().Get("Content-Length"), ShouldEqual, "0")
 			So(resp.Header().Get(api.DistContentDigestKey), ShouldNotBeEmpty)
 			// upload reference should now be removed
-			req = client.NewRequest(resty.MethodGet, u.Path)
+			req = client.NewRequest(reggie.GET, "/v2/:name/4/repo5/repo6/blobs/uploads/:uuid", reggie.WithUUID(uuid))
 			resp, err = client.Do(req)
 			Printf("\nResponse code: %v\nResponse body: %v\nResponse Header: %v\n", resp.StatusCode(), resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 404)
 			// blob reference should be accessible
-			req = client.NewRequest(resty.MethodGet, bu.Path)
+			req = client.NewRequest(reggie.GET, "/v2/:name/4/repo5/repo6/blobs/:digest", reggie.WithDigest(blobDigest))
 			resp, err = client.Do(req)
 			Printf("\nResponse code: %v\nResponse body: %v\nResponse Header: %v\n", resp.StatusCode(), resp, resp.Header())
 			So(err, ShouldBeNil)
@@ -462,17 +469,18 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 		Convey("Create and delete uploads", func() {
 			Print("\nCreate and delete uploads")
 			// create a upload
-			req := client.NewRequest(resty.MethodPost, "/v2/:namespace/blobs/uploads/")
+			req := client.NewRequest(reggie.POST, "/v2/:name/blobs/uploads/")
 			resp, err := client.Do(req)
 			Printf("\nResponse code: %v\nResponse body: %v\nResponse Header: %v\n", resp.StatusCode(), resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 202)
 			loc := resp.Header().Get("Location")
 			u, err := url.Parse(loc)
+			uuid := path.Base(u.Path)
 			So(loc, ShouldNotBeEmpty)
 
 			// delete this upload
-			req = client.NewRequest(resty.MethodDelete, u.Path)
+			req = client.NewRequest(reggie.DELETE, "/v2/:name/blobs/uploads/:uuid", reggie.WithUUID(uuid))
 			resp, err = client.Do(req)
 			Printf("\nResponse code: %v\nResponse body: %v\nResponse Header: %v\n", resp.StatusCode(), resp, resp.Header())
 			So(err, ShouldBeNil)
@@ -482,20 +490,21 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 		Convey("Create and delete blobs", func() {
 			Print("\nCreate and delete blobs")
 			// create a upload
-			req := client.NewRequest(resty.MethodPost, "/v2/:namespace/blobs/uploads/")
+			req := client.NewRequest(reggie.POST, "/v2/:name/blobs/uploads/")
 			resp, err := client.Do(req)
 			Printf("\nResponse code: %v\nResponse body: %v\nResponse Header: %v\n", resp.StatusCode(), resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 202)
 			loc := resp.Header().Get("Location")
 			u, err := url.Parse(loc)
+			uuid := path.Base(u.Path)
 			So(loc, ShouldNotBeEmpty)
 
 			content := []byte("this is a blob")
 			digest := godigest.FromBytes(content)
 			So(digest, ShouldNotBeNil)
 			// monolithic blob upload
-			req = client.NewRequest(resty.MethodPut, u.Path)
+			req = client.NewRequest(reggie.PUT, "/v2/:name/blobs/uploads/:uuid", reggie.WithUUID(uuid))
 			req.SetQueryParam("digest", digest.String())
 			req.SetHeader("Content-Type", "application/octet-stream")
 			req.SetBody(content)
@@ -505,11 +514,12 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 			So(resp.StatusCode(), ShouldEqual, 201)
 			blobLoc := resp.Header().Get("Location")
 			bu, err := url.Parse(blobLoc)
+			blobDigest := path.Base(bu.Path)
 			So(blobLoc, ShouldNotBeEmpty)
 			So(resp.Header().Get(api.DistContentDigestKey), ShouldNotBeEmpty)
 
 			// delete this blob
-			req = client.NewRequest(resty.MethodDelete, bu.Path)
+			req = client.NewRequest(reggie.DELETE, "/v2/:name/blobs/:digest", reggie.WithDigest(blobDigest))
 			resp, err = client.Do(req)
 			Printf("\nResponse code: %v\nResponse body: %v\nResponse Header: %v\n", resp.StatusCode(), resp, resp.Header())
 			So(err, ShouldBeNil)
@@ -520,16 +530,17 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 		Convey("Manifests", func() {
 			Print("\nManifests")
 			// create a blob/layer
-			req := client.NewRequest(resty.MethodPost, "/v2/:namespace/blobs/uploads/")
+			req := client.NewRequest(reggie.POST, "/v2/:name/blobs/uploads/")
 			resp, err := client.Do(req)
 			Printf("\nResponse code: %v\nResponse body: %v\nResponse Header: %v\n", resp.StatusCode(), resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 202)
 			loc := resp.Header().Get("Location")
 			u, err := url.Parse(loc)
+			uuid := path.Base(u.Path)
 			So(loc, ShouldNotBeEmpty)
 
-			req = client.NewRequest(resty.MethodGet, u.Path)
+			req = client.NewRequest(reggie.GET, "/v2/:name/blobs/uploads/:uuid", reggie.WithUUID(uuid))
 			resp, err = client.Do(req)
 			Printf("\nResponse code: %v\nResponse body: %v\nResponse Header: %v\n", resp.StatusCode(), resp, resp.Header())
 			So(err, ShouldBeNil)
@@ -538,7 +549,7 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 			digest := godigest.FromBytes(content)
 			So(digest, ShouldNotBeNil)
 			// monolithic blob upload: success
-			req = client.NewRequest(resty.MethodPut, u.Path)
+			req = client.NewRequest(reggie.PUT, "/v2/:name/blobs/uploads/:uuid", reggie.WithUUID(uuid))
 			req.SetQueryParam("digest", digest.String())
 			req.SetHeader("Content-Type", "application/octet-stream")
 			req.SetBody(content)
@@ -547,7 +558,6 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 201)
 			blobLoc := resp.Header().Get("Location")
-			//bu, err := url.Parse(blobLoc)
 			So(blobLoc, ShouldNotBeEmpty)
 			So(resp.Header().Get("Content-Length"), ShouldEqual, "0")
 			So(resp.Header().Get(api.DistContentDigestKey), ShouldNotBeEmpty)
@@ -558,7 +568,7 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 			So(err, ShouldBeNil)
 			digest = godigest.FromBytes(content)
 			So(digest, ShouldNotBeNil)
-			req = client.NewRequest(resty.MethodPut, "/v2/:namespace/manifests/test:1.0")
+			req = client.NewRequest(reggie.PUT, "/v2/:name/manifests/test:1.0")
 			req.SetHeader("Content-Type", "application/vnd.oci.image.manifest.v1+json")
 			req.SetBody(content)
 			resp, err = client.Do(req)
@@ -570,24 +580,24 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 			So(d, ShouldEqual, digest.String())
 
 			// check/get by tag
-			req = client.NewRequest(resty.MethodHead, "/v2/:namespace/manifests/test:1.0")
+			req = client.NewRequest(reggie.HEAD, "/v2/:name/manifests/test:1.0")
 			resp, err = client.Do(req)
 			Printf("\nResponse code: %v\nResponse body: %v\nResponse Header: %v\n", resp.StatusCode(), resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 200)
-			req = client.NewRequest(resty.MethodGet, "/v2/:namespace/manifests/test:1.0")
+			req = client.NewRequest(reggie.GET, "/v2/:name/manifests/test:1.0")
 			resp, err = client.Do(req)
 			Printf("\nResponse code: %v\nResponse body: %v\nResponse Header: %v\n", resp.StatusCode(), resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 200)
 			So(resp.Body(), ShouldNotBeEmpty)
 			// check/get by reference
-			req = client.NewRequest(resty.MethodHead, "/v2/:namespace/manifests/"+digest.String())
+			req = client.NewRequest(reggie.HEAD, "/v2/:name/manifests/:digest", reggie.WithDigest(digest.String()))
 			resp, err = client.Do(req)
 			Printf("\nResponse code: %v\nResponse body: %v\nResponse Header: %v\n", resp.StatusCode(), resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 200)
-			req = client.NewRequest(resty.MethodGet, "/v2/:namespace/manifests/"+digest.String())
+			req = client.NewRequest(reggie.GET, "/v2/:name/manifests/:digest", reggie.WithDigest(digest.String()))
 			resp, err = client.Do(req)
 			Printf("\nResponse code: %v\nResponse body: %v\nResponse Header: %v\n", resp.StatusCode(), resp, resp.Header())
 			So(err, ShouldBeNil)
@@ -595,37 +605,37 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 			So(resp.Body(), ShouldNotBeEmpty)
 
 			// delete manifest
-			req = client.NewRequest(resty.MethodDelete, "/v2/:namespace/manifests/test:1.0")
+			req = client.NewRequest(reggie.DELETE, "/v2/:name/manifests/test:1.0")
 			resp, err = client.Do(req)
 			Printf("\nResponse code: %v\nResponse body: %v\nResponse Header: %v\n", resp.StatusCode(), resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 200)
 			// delete again should fail
-			req = client.NewRequest(resty.MethodDelete, "/v2/:namespace/manifests/"+digest.String())
+			req = client.NewRequest(reggie.DELETE, "/v2/:name/manifests/:digest", reggie.WithDigest(digest.String()))
 			resp, err = client.Do(req)
 			Printf("\nResponse code: %v\nResponse body: %v\nResponse Header: %v\n", resp.StatusCode(), resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 404)
 
 			// check/get by tag
-			req = client.NewRequest(resty.MethodHead, "/v2/:namespace/manifests/test:1.0")
+			req = client.NewRequest(reggie.HEAD, "/v2/:name/manifests/test:1.0")
 			resp, err = client.Do(req)
 			Printf("\nResponse code: %v\nResponse body: %v\nResponse Header: %v\n", resp.StatusCode(), resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 404)
-			req = client.NewRequest(resty.MethodGet, "/v2/:namespace/manifests/test:1.0")
+			req = client.NewRequest(reggie.GET, "/v2/:name/manifests/test:1.0")
 			resp, err = client.Do(req)
 			Printf("\nResponse code: %v\nResponse body: %v\nResponse Header: %v\n", resp.StatusCode(), resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 404)
 			So(resp.Body(), ShouldNotBeEmpty)
 			// check/get by reference
-			req = client.NewRequest(resty.MethodHead, "/v2/:namespace/manifests/"+digest.String())
+			req = client.NewRequest(reggie.HEAD, "/v2/:name/manifests/:digest", reggie.WithDigest(digest.String()))
 			resp, err = client.Do(req)
 			Printf("\nResponse code: %v\nResponse body: %v\nResponse Header: %v\n", resp.StatusCode(), resp, resp.Header())
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 404)
-			req = client.NewRequest(resty.MethodGet, "/v2/:namespace/manifests/"+digest.String())
+			req = client.NewRequest(reggie.GET, "/v2/:name/manifests/:digest", reggie.WithDigest(digest.String()))
 			resp, err = client.Do(req)
 			Printf("\nResponse code: %v\nResponse body: %v\nResponse Header: %v\n", resp.StatusCode(), resp, resp.Header())
 			So(err, ShouldBeNil)
