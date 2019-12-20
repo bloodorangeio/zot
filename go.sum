@@ -19,6 +19,8 @@ github.com/bloodorangeio/reggie v0.0.0-20191219190540-dc5598b26d7d h1:uBVM991PCq
 github.com/bloodorangeio/reggie v0.0.0-20191219190540-dc5598b26d7d/go.mod h1:q4rpNJQbLMpeLtvei7bAvHp9WqyCkLRrsNHkJCiqmaM=
 github.com/bloodorangeio/reggie v0.0.0-20191219204153-556e9c4c4d6e h1:+lrNOJM1nHDRoz0Dp9HqmORnyk1B/H4a1QQnUixGCwU=
 github.com/bloodorangeio/reggie v0.0.0-20191219204153-556e9c4c4d6e/go.mod h1:q4rpNJQbLMpeLtvei7bAvHp9WqyCkLRrsNHkJCiqmaM=
+github.com/bloodorangeio/reggie v0.0.0-20191220174648-a913bf396391 h1:f2AKxixy0ez1PW5OKloxfLaCmdFtC26EGZsiyIWL/2Q=
+github.com/bloodorangeio/reggie v0.0.0-20191220174648-a913bf396391/go.mod h1:q4rpNJQbLMpeLtvei7bAvHp9WqyCkLRrsNHkJCiqmaM=
 github.com/cespare/xxhash v1.1.0/go.mod h1:XrSqR1VqqWfGrhpAt58auRo0WTKS1nRRg3ghfAqPWnc=
 github.com/client9/misspell v0.3.4/go.mod h1:qj6jICC3Q7zFZvVWo7KLAzC3yx5G7kyvSDkc90ppPyw=
 github.com/coreos/bbolt v1.3.2/go.mod h1:iRUV2dpdMOn7Bo10OQBFzIJO9kkE559Wcmn+qkEiiKk=

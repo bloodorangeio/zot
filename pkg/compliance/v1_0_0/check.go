@@ -161,12 +161,11 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 			So(resp.StatusCode(), ShouldEqual, 400)
 			// without the Content-Length should fail
 			req = client.NewRequest(reggie.PUT, "/v2/:name/blobs/uploads/:uuid", reggie.WithUUID(uuid))
-			respx, err := resty.R().SetQueryParam("digest", digest.String()).Put(client.HostURL + "v2/1/repo2/repo3/blobs/uploads/" + uuid)
 			req.SetQueryParam("digest", digest.String())
 			resp, err = client.Do(req)
 			Printf("\nResponse code: %v\nResponse body: %v\nResponse Header: %v\n", resp.StatusCode(), resp, resp.Header())
 			So(err, ShouldBeNil)
-			So(respx.StatusCode(), ShouldEqual, 400)
+			So(resp.StatusCode(), ShouldEqual, 400)
 			// without any data to send, should fail
 			req = client.NewRequest(reggie.PUT, "/v2/:name/blobs/uploads/:uuid", reggie.WithUUID(uuid))
 			//req.SetQueryParam("digest", digest.String())
@@ -183,7 +182,10 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 			resp, err = client.Do(req)
 			Printf("\nResponse code: %v\nResponse body: %v\nResponse Header: %v\n", resp.StatusCode(), resp, resp.Header())
 			So(err, ShouldBeNil)
+
+			//This is failing test #1
 			So(resp.StatusCode(), ShouldEqual, 201)
+
 			blobLoc := resp.Header().Get("Location")
 			So(blobLoc, ShouldNotBeEmpty)
 			So(resp.Header().Get("Content-Length"), ShouldEqual, "0")
@@ -210,7 +212,10 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 			resp, err := client.Do(req)
 			Printf("\nResponse code: %v\nResponse body: %v\nResponse Header: %v\n", resp.StatusCode(), resp, resp.Header())
 			So(err, ShouldBeNil)
+
+			//This is failing test #2
 			So(resp.StatusCode(), ShouldEqual, 202)
+
 			loc := resp.Header().Get("Location")
 			u, err := url.Parse(loc)
 			uuid := path.Base(u.Path)
@@ -309,6 +314,8 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 			resp, err = client.Do(req)
 			Printf("\nResponse code: %v\nResponse body: %v\nResponse Header: %v\n", resp.StatusCode(), resp, resp.Header())
 			So(err, ShouldBeNil)
+
+			//This is failing test #3
 			So(resp.StatusCode(), ShouldEqual, 202)
 
 			// check progress
@@ -380,7 +387,10 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 			resp, err := client.Do(req)
 			Printf("\nResponse code: %v\nResponse body: %v\nResponse Header: %v\n", resp.StatusCode(), resp, resp.Header())
 			So(err, ShouldBeNil)
+
+			//This is failing test #4
 			So(resp.StatusCode(), ShouldEqual, 202)
+
 			loc := resp.Header().Get("Location")
 			u, err := url.Parse(loc)
 			So(loc, ShouldNotBeEmpty)
@@ -484,6 +494,8 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 			resp, err = client.Do(req)
 			Printf("\nResponse code: %v\nResponse body: %v\nResponse Header: %v\n", resp.StatusCode(), resp, resp.Header())
 			So(err, ShouldBeNil)
+
+			//This is failing test #5
 			So(resp.StatusCode(), ShouldEqual, 200)
 		})
 
@@ -523,7 +535,10 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 			resp, err = client.Do(req)
 			Printf("\nResponse code: %v\nResponse body: %v\nResponse Header: %v\n", resp.StatusCode(), resp, resp.Header())
 			So(err, ShouldBeNil)
+
+			//This is failing test #6
 			So(resp.StatusCode(), ShouldEqual, 202)
+
 			So(resp.Header().Get("Content-Length"), ShouldEqual, "0")
 		})
 
@@ -574,7 +589,10 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 			resp, err = client.Do(req)
 			Printf("\nResponse code: %v\nResponse body: %v\nResponse Header: %v\n", resp.StatusCode(), resp, resp.Header())
 			So(err, ShouldBeNil)
+
+			//This is failing test #7
 			So(resp.StatusCode(), ShouldEqual, 201)
+
 			d := resp.Header().Get(api.DistContentDigestKey)
 			So(d, ShouldNotBeEmpty)
 			So(d, ShouldEqual, digest.String())
