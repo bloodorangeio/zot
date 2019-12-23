@@ -24,7 +24,6 @@ import (
 	//ispec "github.com/opencontainers/image-spec/specs-go/v1"
 	. "github.com/smartystreets/goconvey/convey"
 	"github.com/smartystreets/goconvey/convey/reporting"
-	"gopkg.in/resty.v1"
 )
 
 func CheckWorkflows(t *testing.T, config *compliance.Config) {
@@ -37,13 +36,13 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 		defer outputJSONExit()
 	}
 
-	client := &reggie.Client{}
-	client.Client = resty.New()
-	client.Client.Debug = true
-	client.Config.Address = config.Address
-	client.Config.Namespace = config.Namespace
-	client.Config.Auth.Basic.Username = config.Username
-	client.Config.Auth.Basic.Password = config.Password
+	client, err := reggie.NewClient(config.Address,
+		reggie.WithUsernamePassword(config.Username, config.Password),
+		reggie.WithDefaultName(config.Namespace))
+	if err != nil {
+		panic(err)
+	}
+	client.Debug = true
 
 	fmt.Println("------------------------------")
 	fmt.Println("Checking for v1.0.0 compliance")
@@ -136,7 +135,7 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 			So(err, ShouldBeNil)
 
 			//TODO:
-			req = client.NewRequest(reggie.GET, "/v2/:name/blobs/uploads/:uuid", reggie.WithUUID(uuid))
+			req = client.NewRequest(reggie.GET, "/v2/:name/blobs/uploads/:session", reggie.WithSessionID(uuid))
 			printRequest(req)
 			resp, err = client.Do(req)
 			So(err, ShouldBeNil)
@@ -153,20 +152,20 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 			content := []byte("this is a blob")
 			digest := godigest.FromBytes(content)
 			So(digest, ShouldNotBeNil)
-			req = client.NewRequest(reggie.PUT, "/v2/:name/blobs/uploads/:uuid", reggie.WithUUID(uuid))
+			req = client.NewRequest(reggie.PUT, "/v2/:name/blobs/uploads/:session", reggie.WithSessionID(uuid))
 			printRequest(req)
 			resp, err = client.Do(req)
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 400)
 			// without the Content-Length should fail
-			req = client.NewRequest(reggie.PUT, "/v2/:name/blobs/uploads/:uuid", reggie.WithUUID(uuid))
+			req = client.NewRequest(reggie.PUT, "/v2/:name/blobs/uploads/:session", reggie.WithSessionID(uuid))
 			printRequest(req)
 			req.SetQueryParam("digest", digest.String())
 			resp, err = client.Do(req)
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 400)
 			// without any data to send, should fail
-			req = client.NewRequest(reggie.PUT, "/v2/:name/blobs/uploads/:uuid", reggie.WithUUID(uuid))
+			req = client.NewRequest(reggie.PUT, "/v2/:name/blobs/uploads/:session", reggie.WithSessionID(uuid))
 
 			//req.SetQueryParam("digest", digest.String())
 			req.SetHeader("Content-Type", "application/octet-stream")
@@ -175,7 +174,7 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 			So(err, ShouldBeNil)
 			So(resp.StatusCode(), ShouldEqual, 400)
 			// monolithic blob upload: success
-			req = client.NewRequest(reggie.PUT, "/v2/:name/blobs/uploads/:uuid", reggie.WithUUID(uuid))
+			req = client.NewRequest(reggie.PUT, "/v2/:name/blobs/uploads/:session", reggie.WithSessionID(uuid))
 			req.SetQueryParam("digest", digest.String())
 			req.SetHeader("Content-Type", "application/octet-stream")
 			req.SetHeader("Content-Length", fmt.Sprintf("%d", len(content)))
@@ -192,7 +191,7 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 			So(resp.Header().Get("Content-Length"), ShouldEqual, "0")
 			So(resp.Header().Get(api.DistContentDigestKey), ShouldNotBeEmpty)
 			// upload reference should now be removed
-			req = client.NewRequest(reggie.GET, "/v2/:name/blobs/uploads/:uuid", reggie.WithUUID(uuid))
+			req = client.NewRequest(reggie.GET, "/v2/:name/blobs/uploads/:session", reggie.WithSessionID(uuid))
 			printRequest(req)
 			resp, err = client.Do(req)
 			So(err, ShouldBeNil)
@@ -308,7 +307,7 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 
 			//write first chunk
 			contentRange := fmt.Sprintf("%d-%d", 0, len(chunk1))
-			req = client.NewRequest(reggie.PATCH, "/v2/:name/blobs/uploads/:uuid", reggie.WithUUID(uuid))
+			req = client.NewRequest(reggie.PATCH, "/v2/:name/blobs/uploads/:session", reggie.WithSessionID(uuid))
 			req.SetHeader("Content-Type", "application/octet-stream")
 			req.SetHeader("Content-Length", fmt.Sprintf("%o", len(chunk1)))
 			req.SetHeader("Content-Range", contentRange)
@@ -325,7 +324,7 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 			So(resp.StatusCode(), ShouldBeIn, []int{202, 204, 404})
 
 			// check progress
-			req = client.NewRequest(reggie.GET, "/v2/:name/blobs/uploads/:uuid", reggie.WithUUID(uuid))
+			req = client.NewRequest(reggie.GET, "/v2/:name/blobs/uploads/:session", reggie.WithSessionID(uuid))
 			printRequest(req)
 			resp, err = client.Do(req)
 			So(err, ShouldBeNil)
@@ -336,7 +335,7 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 
 			// write same chunk should fail
 			contentRange = fmt.Sprintf("%d-%d", 0, len(chunk1))
-			req = client.NewRequest(reggie.PATCH, "/v2/:name/blobs/uploads/:uuid", reggie.WithUUID(uuid))
+			req = client.NewRequest(reggie.PATCH, "/v2/:name/blobs/uploads/:session", reggie.WithSessionID(uuid))
 			req.SetHeader("Content-Type", "application/octet-stream")
 			req.SetHeader("Content-Range", contentRange)
 			req.SetBody(chunk1)
@@ -356,7 +355,7 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 
 			// write final chunk
 			contentRange = fmt.Sprintf("%d-%d", len(chunk1), len(buf.Bytes()))
-			req = client.NewRequest(reggie.PUT, "/v2/:name/blobs/uploads/:uuid", reggie.WithUUID(uuid))
+			req = client.NewRequest(reggie.PUT, "/v2/:name/blobs/uploads/:session", reggie.WithSessionID(uuid))
 			req.SetQueryParam("digest", digest.String())
 			req.SetHeader("Content-Range", contentRange)
 			req.SetHeader("Content-Type", "application/octet-stream")
@@ -374,7 +373,7 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 			So(resp.Header().Get("Content-Length"), ShouldEqual, "0")
 			So(resp.Header().Get(api.DistContentDigestKey), ShouldNotBeEmpty)
 			// upload reference should now be removed
-			req = client.NewRequest(reggie.GET, "/v2/:name/blobs/uploads/:uuid", reggie.WithUUID(uuid))
+			req = client.NewRequest(reggie.GET, "/v2/:name/blobs/uploads/:session", reggie.WithSessionID(uuid))
 			printRequest(req)
 			resp, err = client.Do(req)
 			So(err, ShouldBeNil)
@@ -410,7 +409,7 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 
 			// write first chunk
 			contentRange := fmt.Sprintf("%d-%d", 0, len(chunk1))
-			req = client.NewRequest(reggie.PATCH, "/v2/:name/blobs/uploads/:uuid", reggie.WithUUID(uuid))
+			req = client.NewRequest(reggie.PATCH, "/v2/:name/blobs/uploads/:session", reggie.WithSessionID(uuid))
 			req.SetHeader("Content-Type", "application/octet-stream")
 			req.SetHeader("Content-Range", contentRange)
 			req.SetBody(chunk1)
@@ -420,7 +419,7 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 			So(resp.StatusCode(), ShouldEqual, 202)
 
 			// check progress
-			req = client.NewRequest(reggie.GET, "/v2/:name/blobs/uploads/:uuid", reggie.WithUUID(uuid))
+			req = client.NewRequest(reggie.GET, "/v2/:name/blobs/uploads/:session", reggie.WithSessionID(uuid))
 			printRequest(req)
 			resp, err = client.Do(req)
 			So(err, ShouldBeNil)
@@ -431,7 +430,7 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 
 			// write same chunk should fail
 			contentRange = fmt.Sprintf("%d-%d", 0, len(chunk1))
-			req = client.NewRequest(reggie.PATCH, "/v2/:name/blobs/uploads/:uuid", reggie.WithUUID(uuid))
+			req = client.NewRequest(reggie.PATCH, "/v2/:name/blobs/uploads/:session", reggie.WithSessionID(uuid))
 			req.SetHeader("Content-Type", "application/octet-stream")
 			req.SetHeader("Content-Range", contentRange)
 			req.SetBody(chunk1)
@@ -451,7 +450,7 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 
 			// write final chunk
 			contentRange = fmt.Sprintf("%d-%d", len(chunk1), len(buf.Bytes()))
-			req = client.NewRequest(reggie.PUT, "/v2/:name/blobs/uploads/:uuid", reggie.WithUUID(uuid))
+			req = client.NewRequest(reggie.PUT, "/v2/:name/blobs/uploads/:session", reggie.WithSessionID(uuid))
 			req.SetQueryParam("digest", digest.String())
 			req.SetHeader("Content-Range", contentRange)
 			req.SetHeader("Content-Type", "application/octet-stream")
@@ -469,7 +468,7 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 			So(resp.Header().Get("Content-Length"), ShouldEqual, "0")
 			So(resp.Header().Get(api.DistContentDigestKey), ShouldNotBeEmpty)
 			// upload reference should now be removed
-			req = client.NewRequest(reggie.GET, "/v2/:name/blobs/uploads/:uuid", reggie.WithUUID(uuid))
+			req = client.NewRequest(reggie.GET, "/v2/:name/blobs/uploads/:session", reggie.WithSessionID(uuid))
 			printRequest(req)
 			resp, err = client.Do(req)
 			So(err, ShouldBeNil)
@@ -496,7 +495,7 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 			So(loc, ShouldNotBeEmpty)
 
 			// delete this upload
-			req = client.NewRequest(reggie.DELETE, "/v2/:name/blobs/uploads/:uuid", reggie.WithUUID(uuid))
+			req = client.NewRequest(reggie.DELETE, "/v2/:name/blobs/uploads/:session", reggie.WithSessionID(uuid))
 			printRequest(req)
 			resp, err = client.Do(req)
 			So(err, ShouldBeNil)
@@ -522,7 +521,7 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 			digest := godigest.FromBytes(content)
 			So(digest, ShouldNotBeNil)
 			// monolithic blob upload
-			req = client.NewRequest(reggie.PUT, "/v2/:name/blobs/uploads/:uuid", reggie.WithUUID(uuid))
+			req = client.NewRequest(reggie.PUT, "/v2/:name/blobs/uploads/:session", reggie.WithSessionID(uuid))
 			req.SetQueryParam("digest", digest.String())
 			req.SetHeader("Content-Type", "application/octet-stream")
 			req.SetBody(content)
@@ -572,7 +571,7 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 			uuid := path.Base(u.Path)
 			So(loc, ShouldNotBeEmpty)
 
-			req = client.NewRequest(reggie.GET, "/v2/:name/blobs/uploads/:uuid", reggie.WithUUID(uuid))
+			req = client.NewRequest(reggie.GET, "/v2/:name/blobs/uploads/:session", reggie.WithSessionID(uuid))
 			printRequest(req)
 			resp, err = client.Do(req)
 			So(err, ShouldBeNil)
@@ -581,7 +580,7 @@ func CheckWorkflows(t *testing.T, config *compliance.Config) {
 			digest := godigest.FromBytes(content)
 			So(digest, ShouldNotBeNil)
 			// monolithic blob upload: success
-			req = client.NewRequest(reggie.PUT, "/v2/:name/blobs/uploads/:uuid", reggie.WithUUID(uuid))
+			req = client.NewRequest(reggie.PUT, "/v2/:name/blobs/uploads/:session", reggie.WithSessionID(uuid))
 			req.SetQueryParam("digest", digest.String())
 			req.SetHeader("Content-Type", "application/octet-stream")
 			req.SetBody(content)
