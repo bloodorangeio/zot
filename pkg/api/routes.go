@@ -476,6 +476,7 @@ func (rh *RouteHandler) CheckBlob(w http.ResponseWriter, r *http.Request) {
 // @Summary Get image blob/layer
 // @Description Get an image's blob/layer given a digest
 // @Accept  json
+// @Produce application/tar+gzip
 // @Produce application/vnd.oci.image.layer.v1.tar+gzip
 // @Param   name				path    string     true        "repository name"
 // @Param   digest     	path    string     true        "blob/layer digest"

@@ -14,8 +14,6 @@
         },
         "version": "v0.1.0-dev"
     },
-    "host": "{{.Host}}",
-    "basePath": "{{.BasePath}}",
     "paths": {
         "/v2/": {
             "get": {
@@ -51,7 +49,6 @@
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "type": "object",
                             "$ref": "#/definitions/api.RepositoryList"
                         }
                     },
@@ -92,7 +89,7 @@
                         "headers": {
                             "Location": {
                                 "type": "string",
-                                "description": "/v2/{name}/blobs/uploads/{uuid}"
+                                "description": "/v2/{name}/blobs/uploads/{session_id}"
                             },
                             "Range": {
                                 "type": "string",
@@ -115,9 +112,9 @@
                 }
             }
         },
-        "/v2/{name}/blobs/uploads/{uuid}": {
+        "/v2/{name}/blobs/uploads/{session_id}": {
             "get": {
-                "description": "Get an image's blob/layer upload given a uuid",
+                "description": "Get an image's blob/layer upload given a session_id",
                 "consumes": [
                     "application/json"
                 ],
@@ -135,8 +132,8 @@
                     },
                     {
                         "type": "string",
-                        "description": "upload uuid",
-                        "name": "uuid",
+                        "description": "upload session_id",
+                        "name": "session_id",
                         "in": "path",
                         "required": true
                     }
@@ -181,8 +178,8 @@
                     },
                     {
                         "type": "string",
-                        "description": "upload uuid",
-                        "name": "uuid",
+                        "description": "upload session_id",
+                        "name": "session_id",
                         "in": "path",
                         "required": true
                     },
@@ -234,8 +231,8 @@
                     },
                     {
                         "type": "string",
-                        "description": "upload uuid",
-                        "name": "uuid",
+                        "description": "upload session_id",
+                        "name": "session_id",
                         "in": "path",
                         "required": true
                     }
@@ -262,7 +259,7 @@
                 }
             },
             "patch": {
-                "description": "Resume an image's blob/layer upload given an uuid",
+                "description": "Resume an image's blob/layer upload given an session_id",
                 "consumes": [
                     "application/json"
                 ],
@@ -280,8 +277,8 @@
                     },
                     {
                         "type": "string",
-                        "description": "upload uuid",
-                        "name": "uuid",
+                        "description": "upload session_id",
+                        "name": "session_id",
                         "in": "path",
                         "required": true
                     }
@@ -295,7 +292,7 @@
                         "headers": {
                             "Location": {
                                 "type": "string",
-                                "description": "/v2/{name}/blobs/uploads/{uuid}"
+                                "description": "/v2/{name}/blobs/uploads/{session_id}"
                             },
                             "Range": {
                                 "type": "string",
@@ -337,6 +334,7 @@
                     "application/json"
                 ],
                 "produces": [
+                    "application/tar+gzip",
                     "application/vnd.oci.image.layer.v1.tar+gzip"
                 ],
                 "summary": "Get image blob/layer",
@@ -360,7 +358,6 @@
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "type": "object",
                             "$ref": "#/definitions/api.ImageManifest"
                         }
                     }
@@ -429,7 +426,6 @@
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "type": "object",
                             "$ref": "#/definitions/api.ImageManifest"
                         },
                         "headers": {
@@ -472,7 +468,6 @@
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "type": "object",
                             "$ref": "#/definitions/api.ImageManifest"
                         },
                         "headers": {
@@ -652,14 +647,33 @@
                         "name": "name",
                         "in": "path",
                         "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "limit entries for pagination",
+                        "name": "n",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "last tag value for pagination",
+                        "name": "last",
+                        "in": "query",
+                        "required": true
                     }
                 ],
                 "responses": {
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "type": "object",
                             "$ref": "#/definitions/api.ImageTags"
+                        }
+                    },
+                    "400": {
+                        "description": "bad request",
+                        "schema": {
+                            "type": "string"
                         }
                     },
                     "404": {
