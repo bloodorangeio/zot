@@ -17,7 +17,7 @@ storage:\n\
 # ---
 # Stage 2: Final image with nothing but certs, binary, and default config file
 # ---
-FROM docker.io/scratch AS final
+FROM scratch AS final
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 COPY --from=builder /go/src/github.com/anuvu/zot/bin/zot /zot
 COPY --from=builder /go/src/github.com/anuvu/zot/config.yml /etc/zot/config.yml
