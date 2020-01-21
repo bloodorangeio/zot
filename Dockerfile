@@ -1,7 +1,7 @@
 # ---
 # Stage 1: Install certs, build binary, create default config file
 # ---
-FROM golang:1.13.6-alpine3.11 AS builder
+FROM docker.io/golang:1.13.6-alpine3.11 AS builder
 RUN apk --update add git make ca-certificates
 RUN mkdir -p /go/src/github.com/anuvu/zot
 WORKDIR /go/src/github.com/anuvu/zot
@@ -17,7 +17,7 @@ storage:\n\
 # ---
 # Stage 2: Final image with nothing but certs, binary, and default config file
 # ---
-FROM scratch
+FROM docker.io/scratch AS final
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 COPY --from=builder /go/src/github.com/anuvu/zot/bin/zot /zot
 COPY --from=builder /go/src/github.com/anuvu/zot/config.yml /etc/zot/config.yml
