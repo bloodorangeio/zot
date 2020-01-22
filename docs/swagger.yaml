@@ -1,3 +1,4 @@
+basePath: '{{.BasePath}}'
 definitions:
   api.ImageManifest:
     type: object
@@ -17,6 +18,7 @@ definitions:
           type: string
         type: array
     type: object
+host: '{{.Host}}'
 info:
   contact:
     email: support@swagger.io
@@ -54,6 +56,7 @@ paths:
           description: OK
           schema:
             $ref: '#/definitions/api.RepositoryList'
+            type: object
         "500":
           description: internal server error
           schema:
@@ -99,13 +102,13 @@ paths:
         required: true
         type: string
       produces:
-      - application/tar+gzip
       - application/vnd.oci.image.layer.v1.tar+gzip
       responses:
         "200":
           description: OK
           schema:
             $ref: '#/definitions/api.ImageManifest'
+            type: object
       summary: Get image blob/layer
     head:
       consumes:
@@ -133,6 +136,7 @@ paths:
               type: object
           schema:
             $ref: '#/definitions/api.ImageManifest'
+            type: object
       summary: Check image blob/layer
   /v2/{name}/blobs/uploads:
     post:
@@ -152,7 +156,7 @@ paths:
           description: accepted
           headers:
             Location:
-              description: /v2/{name}/blobs/uploads/{session_id}
+              description: /v2/{name}/blobs/uploads/{uuid}
               type: string
             Range:
               description: bytes=0-0
@@ -168,7 +172,7 @@ paths:
           schema:
             type: string
       summary: Create image blob/layer upload
-  /v2/{name}/blobs/uploads/{session_id}:
+  /v2/{name}/blobs/uploads/{uuid}:
     delete:
       consumes:
       - application/json
@@ -179,9 +183,9 @@ paths:
         name: name
         required: true
         type: string
-      - description: upload session_id
+      - description: upload uuid
         in: path
-        name: session_id
+        name: uuid
         required: true
         type: string
       produces:
@@ -203,16 +207,16 @@ paths:
     get:
       consumes:
       - application/json
-      description: Get an image's blob/layer upload given a session_id
+      description: Get an image's blob/layer upload given a uuid
       parameters:
       - description: repository name
         in: path
         name: name
         required: true
         type: string
-      - description: upload session_id
+      - description: upload uuid
         in: path
-        name: session_id
+        name: uuid
         required: true
         type: string
       produces:
@@ -234,16 +238,16 @@ paths:
     patch:
       consumes:
       - application/json
-      description: Resume an image's blob/layer upload given an session_id
+      description: Resume an image's blob/layer upload given an uuid
       parameters:
       - description: repository name
         in: path
         name: name
         required: true
         type: string
-      - description: upload session_id
+      - description: upload uuid
         in: path
-        name: session_id
+        name: uuid
         required: true
         type: string
       produces:
@@ -253,7 +257,7 @@ paths:
           description: accepted
           headers:
             Location:
-              description: /v2/{name}/blobs/uploads/{session_id}
+              description: /v2/{name}/blobs/uploads/{uuid}
               type: string
             Range:
               description: bytes=0-128
@@ -287,9 +291,9 @@ paths:
         name: name
         required: true
         type: string
-      - description: upload session_id
+      - description: upload uuid
         in: path
-        name: session_id
+        name: uuid
         required: true
         type: string
       - description: blob/layer digest
@@ -363,6 +367,7 @@ paths:
               type: object
           schema:
             $ref: '#/definitions/api.ImageManifest'
+            type: object
         "404":
           description: not found
           schema:
@@ -453,16 +458,6 @@ paths:
         name: name
         required: true
         type: string
-      - description: limit entries for pagination
-        in: query
-        name: "n"
-        required: true
-        type: integer
-      - description: last tag value for pagination
-        in: query
-        name: last
-        required: true
-        type: string
       produces:
       - application/json
       responses:
@@ -470,10 +465,7 @@ paths:
           description: OK
           schema:
             $ref: '#/definitions/api.ImageTags'
-        "400":
-          description: bad request
-          schema:
-            type: string
+            type: object
         "404":
           description: not found
           schema:
