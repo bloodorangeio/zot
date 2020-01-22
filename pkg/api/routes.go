@@ -16,6 +16,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"os"
 	"path"
 	"sort"
 	"strconv"
@@ -24,6 +25,7 @@ import (
 	_ "github.com/anuvu/zot/docs" // nolint (golint) - as required by swaggo
 	"github.com/anuvu/zot/errors"
 	"github.com/anuvu/zot/pkg/log"
+	"github.com/chartmuseum/auth"
 	"github.com/gorilla/mux"
 	jsoniter "github.com/json-iterator/go"
 	ispec "github.com/opencontainers/image-spec/specs-go/v1"
@@ -50,8 +52,45 @@ func NewRouteHandler(c *Controller) *RouteHandler {
 	return rh
 }
 
+func BearerAuthHandler(c *Controller) mux.MiddlewareFunc {
+	authHost := os.Getenv("BEARER_AUTH_HOST")
+	publicKeyPath := os.Getenv("BEARER_AUTH_KEYPATH")
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			authorizer, err := auth.NewAuthorizer(&auth.AuthorizerOptions{
+				Realm: fmt.Sprintf("https://%s/auth/token", authHost),
+				Service: authHost,
+				PublicKeyPath: publicKeyPath,
+				AccessEntryType: "repository",
+			})
+			if err != nil {
+				panic(err)
+			}
+
+			header := r.Header.Get("Authorization")
+			fmt.Println(header)
+			permissions, err := authorizer.Authorize(header, auth.PullAction, "org1/repo1")
+			if err != nil {
+				panic(err)
+			}
+
+			if !permissions.Allowed {
+				w.Header().Set("WWW-Authenticate", permissions.WWWAuthenticateHeader)
+				w.Header().Set("Content-Type", "application/json")
+				WriteJSON(w, http.StatusUnauthorized, NewError(UNAUTHORIZED))
+				return
+			}
+			// Process request
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+//func BasicAuthHandler(c *Controller) mux.MiddlewareFunc {
+
 func (rh *RouteHandler) SetupRoutes() {
-	rh.c.Router.Use(BasicAuthHandler(rh.c))
+	//rh.c.Router.Use(BasicAuthHandler(rh.c))
+	rh.c.Router.Use(BearerAuthHandler(rh.c))
 	g := rh.c.Router.PathPrefix(RoutePrefix).Subrouter()
 	{
 		g.HandleFunc(fmt.Sprintf("/{name:%s}/tags/list", NameRegexp.String()),
