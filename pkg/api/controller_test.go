@@ -123,10 +123,6 @@ func TestBearerAuth(t *testing.T) {
 			}
 		}))
 		defer authTestServer.Close()
-		resp, _ := resty.R().Get(authTestServer.URL + "/auth/token?service=staging.bundle.bar&scope=repository:org1/repo1:pull")
-		fmt.Println(resp)
-		resp, _ = resty.R().Get(authTestServer.URL + "/auth/token?service=staging.bundle.bar&scope=repository:fortknox/notallowed:pull")
-		fmt.Println(resp)
 
 		config := api.NewConfig()
 		config.HTTP.Port = SecurePort3
@@ -171,19 +167,15 @@ func TestBearerAuth(t *testing.T) {
 		So(err, ShouldBeNil)
 		So(resp, ShouldNotBeNil)
 		So(resp.StatusCode(), ShouldEqual, 401)
-		//var e api.Error
-		//err = json.Unmarshal(resp.Body(), &e)
-		//So(err, ShouldBeNil)
+		resp, err = resty.R().Get(authTestServer.URL + "/auth/token?service=staging.bundle.bar&scope=repository:org1/repo1:pull")
+		So(err, ShouldBeNil)
+		So(resp, ShouldNotBeNil)
+		So(resp.StatusCode(), ShouldEqual, 200)
+		resp, err = resty.R().Get(authTestServer.URL + "/auth/token?service=staging.bundle.bar&scope=repository:fortknox/notallowed:pull")
+		So(err, ShouldBeNil)
+		So(resp, ShouldNotBeNil)
+		So(resp.StatusCode(), ShouldEqual, 200)
 
-		//DONE/////////1. set up auth server
-		//DONE/////////  1a. Generates token from private key file using cm-Auth token generator that uses testPrivateKey file
-		//DONE/////////			see bundlebar auth server
-		//DONE/////////	1b. Just returns a token in application/json.
-		//DONE/////////		{ "access_token": "<jwt>" }
-		//DONE/////////		extract scope query param, use to determine name + action to use in []AccessEntry passed to tokenGenerator.GenerateToken()
-		//DONE/////////		Always returns 200 & valid JWT; sometimes JWT does not contain requested scope
-		//DONE/////////	1c.	actions should be empty in valid JWT token if repo is fortknox/notallowed
-		//DONE/////////
 		//2. Set up a Zot using Bearer Auth, referencing testPublicKey to construct controller on port 8083
 		//		(or whatever next port is not in use)
 		//
