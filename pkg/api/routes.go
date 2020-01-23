@@ -16,7 +16,6 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
-	"os"
 	"path"
 	"sort"
 	"strconv"
@@ -53,14 +52,14 @@ func NewRouteHandler(c *Controller) *RouteHandler {
 }
 
 func BearerAuthHandler(c *Controller) mux.MiddlewareFunc {
-	authHost := os.Getenv("BEARER_AUTH_HOST")
-	publicKeyPath := os.Getenv("BEARER_AUTH_KEYPATH")
+	//authHost := os.Getenv("BEARER_AUTH_HOST")
+	//publicKeyPath := os.Getenv("BEARER_AUTH_KEYPATH")
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			authorizer, err := auth.NewAuthorizer(&auth.AuthorizerOptions{
-				Realm: fmt.Sprintf("https://%s/auth/token", authHost),
-				Service: authHost,
-				PublicKeyPath: publicKeyPath,
+				Realm: fmt.Sprintf("https://%s/auth/token", c.Config.HTTP.Auth.Bearer.Realm),
+				Service: c.Config.HTTP.Auth.Bearer.Service,
+				PublicKeyPath: c.Config.HTTP.Auth.Bearer.Cert,
 				AccessEntryType: "repository",
 			})
 			if err != nil {

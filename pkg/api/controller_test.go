@@ -171,6 +171,16 @@ func TestBearerAuth(t *testing.T) {
 		So(err, ShouldBeNil)
 		So(resp, ShouldNotBeNil)
 		So(resp.StatusCode(), ShouldEqual, 401)
+		resp, err = resty.R().Get(authTestServer.URL + "/auth/token?service=staging.bundle.bar&scope=repository:org1/repo1:pull")
+		So(err, ShouldBeNil)
+		So(resp, ShouldNotBeNil)
+		So(resp.StatusCode(), ShouldEqual, 200)
+		resp, err = resty.R().Get(authTestServer.URL + "/auth/token?service=staging.bundle.bar&scope=repository:fortknox/notallowed:pull")
+		So(err, ShouldBeNil)
+		So(resp, ShouldNotBeNil)
+		So(resp.StatusCode(), ShouldEqual, 200)
+
+
 		//var e api.Error
 		//err = json.Unmarshal(resp.Body(), &e)
 		//So(err, ShouldBeNil)
