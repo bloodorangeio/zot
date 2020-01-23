@@ -96,9 +96,9 @@ func TestBearerAuth(t *testing.T) {
 			}
 			name := parts[1]
 
-			actions := []string{cmAuth.PullAction}
-			if name == UnauthorizedNamespace {
-				actions = []string{}
+			var actions []string
+			if name != UnauthorizedNamespace {
+				actions = []string{cmAuth.PullAction}
 			}
 			access := []cmAuth.AccessEntry{
 				{

@@ -170,7 +170,7 @@ func BasicAuthHandler(c *Controller) mux.MiddlewareFunc {
 // nolint (gocyclo) - we use closure making this a complex subroutine
 //TODO: rewrite this
 func AuthHandler(c *Controller) mux.MiddlewareFunc {
-	if c.Config.HTTP.Auth.Bearer.Cert != "" {
+	if c.Config.HTTP.Auth != nil && c.Config.HTTP.Auth.Bearer != nil && c.Config.HTTP.Auth.Bearer.Cert != "" {
 		return BearerAuthHandler(c)
 	}
 	return BasicAuthHandler(c)
