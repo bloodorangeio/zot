@@ -11,6 +11,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"strings"
 	"testing"
@@ -127,30 +128,52 @@ func TestBearerAuth(t *testing.T) {
 		resp, _ = resty.R().Get(authTestServer.URL + "/auth/token?service=staging.bundle.bar&scope=repository:fortknox/notallowed:pull")
 		fmt.Println(resp)
 
-		//TODO: scaffold off of this
-		//config := api.NewConfig()
-		//config.HTTP.Port = SecurePort1
-		//htpasswdPath := makeHtpasswdFile()
-		//defer os.Remove(htpasswdPath)
+		config := api.NewConfig()
+		config.HTTP.Port = SecurePort3
 
-		//config.HTTP.Auth = &api.AuthConfig{
-		//	HTPasswd: api.AuthHTPasswd{
-		//		Path: htpasswdPath,
-		//	},
-		//}
-		//c := api.NewController(config)
-		//dir, err := ioutil.TempDir("", "oci-repo-test")
-		//if err != nil {
-		//	panic(err)
-		//}
-		//defer os.RemoveAll(dir)
-		//c.Config.Storage.RootDirectory = dir
-		//go func() {
-		//	// this blocks
-		//	if err := c.Run(); err != nil {
-		//		return
-		//	}
-		//}()
+		u, err := url.Parse(authTestServer.URL)
+		config.HTTP.Auth = &api.AuthConfig{
+			Bearer: &api.BearerConfig{
+				Cert: BearerCert,
+				Realm: authTestServer.URL + "/auth/token",
+				Service: u.Host,
+			},
+		}
+		c := api.NewController(config)
+		dir, err := ioutil.TempDir("", "oci-repo-test")
+		if err != nil {
+			panic(err)
+		}
+		defer os.RemoveAll(dir)
+		c.Config.Storage.RootDirectory = dir
+		go func() {
+			// this blocks
+			if err := c.Run(); err != nil {
+				return
+			}
+		}()
+
+		// wait till ready
+		for {
+			_, err := resty.R().Get(BaseURL3)
+			if err == nil {
+				break
+			}
+			time.Sleep(100 * time.Millisecond)
+		}
+
+		defer func() {
+			ctx := context.Background()
+			_ = c.Server.Shutdown(ctx)
+		}()
+
+		resp, err = resty.R().Get(BaseURL3 + "/v2/")
+		So(err, ShouldBeNil)
+		So(resp, ShouldNotBeNil)
+		So(resp.StatusCode(), ShouldEqual, 401)
+		//var e api.Error
+		//err = json.Unmarshal(resp.Body(), &e)
+		//So(err, ShouldBeNil)
 
 		//DONE/////////1. set up auth server
 		//DONE/////////  1a. Generates token from private key file using cm-Auth token generator that uses testPrivateKey file
@@ -191,7 +214,6 @@ func TestBasicAuth(t *testing.T) {
 		go func() {
 			// this blocks
 			if err := c.Run(); err != nil {
-				return
 			}
 		}()
 

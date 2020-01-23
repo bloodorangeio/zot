@@ -112,6 +112,12 @@ func (c *Config) Validate(log log.Logger) error {
 			log.Error().Str("userAttribute", l.UserAttribute).Msg("invalid LDAP configuration")
 			return errors.ErrLDAPConfig
 		}
+	} else if c.HTTP.Auth != nil && c.HTTP.Auth.Bearer != nil {
+		l := c.HTTP.Auth.Bearer
+		if l.Cert == "" {
+			log.Error().Str("Cert", l.Cert).Msg("invalid Cert file")
+			return errors.ErrLDAPConfig
+		}
 	}
 
 	return nil
