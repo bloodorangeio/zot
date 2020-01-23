@@ -1,0 +1,20 @@
+{
+  "version":"0.1.0-dev",
+  "storage":{
+    "rootDirectory":"/tmp/zot"
+  },
+  "http": {
+    "address":"127.0.0.1",
+    "port":"8080",
+    "auth": {
+      "bearer": {
+        "realm": "https://staging.bundle.bar/auth/token",
+        "service": "staging.bundle.bar",
+        "cert": "test/data/bearer-test.crt"
+      }
+    }
+  },
+  "log":{
+    "level":"debug"
+  }
+}

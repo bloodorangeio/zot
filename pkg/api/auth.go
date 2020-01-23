@@ -24,7 +24,6 @@ func authFail(w http.ResponseWriter, realm string, delay int) {
 	WriteJSON(w, http.StatusUnauthorized, NewError(UNAUTHORIZED))
 }
 
-// nolint (gocyclo) - we use closure making this a complex subroutine
 func BasicAuthHandler(c *Controller) mux.MiddlewareFunc {
 	realm := c.Config.HTTP.Realm
 	if realm == "" {
@@ -166,4 +165,13 @@ func BasicAuthHandler(c *Controller) mux.MiddlewareFunc {
 			return
 		})
 	}
+}
+
+// nolint (gocyclo) - we use closure making this a complex subroutine
+//TODO: rewrite this
+func AuthHandler(c *Controller) mux.MiddlewareFunc {
+	if c.Config.HTTP.Auth.Bearer.Cert != "" {
+		return BearerAuthHandler(c)
+	}
+	return BasicAuthHandler(c)
 }

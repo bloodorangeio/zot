@@ -9,27 +9,37 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net"
+	"net/http"
+	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/anuvu/zot/pkg/api"
+	cmAuth "github.com/chartmuseum/auth"
 	vldap "github.com/nmcclain/ldap"
 	. "github.com/smartystreets/goconvey/convey"
 	"gopkg.in/resty.v1"
 )
 
 const (
-	BaseURL1       = "http://127.0.0.1:8081"
-	BaseURL2       = "http://127.0.0.1:8082"
-	BaseSecureURL2 = "https://127.0.0.1:8082"
-	SecurePort1    = "8081"
-	SecurePort2    = "8082"
-	username       = "test"
-	passphrase     = "test"
-	ServerCert     = "../../test/data/server.cert"
-	ServerKey      = "../../test/data/server.key"
-	CACert         = "../../test/data/ca.crt"
+	BaseURL1              = "http://127.0.0.1:8081"
+	BaseURL2              = "http://127.0.0.1:8082"
+	BaseSecureURL2        = "https://127.0.0.1:8082"
+	SecurePort1           = "8081"
+	SecurePort2           = "8082"
+	username              = "test"
+	passphrase            = "test"
+	ServerCert            = "../../test/data/server.cert"
+	ServerKey             = "../../test/data/server.key"
+	CACert                = "../../test/data/ca.crt"
+	BearerCert            = "../../test/data/bearer-test.crt"
+	BearerKey             = "../../test/data/bearer-test.key"
+	AuthServerURL         = "http://127.0.0.1:8083"
+	AuthServerPort        = "8083"
+	AuthorizedNamespace   = "org1/repo1"
+	UnauthorizedNamespace = "fortknox/notallowed"
 )
 
 func makeHtpasswdFile() string {
@@ -55,6 +65,81 @@ func TestNew(t *testing.T) {
 	})
 }
 
+//TODO write test
+//401 ? get token, retry & expect 200
+
+//TODO write test
+//401 ? get valid token without required scope, retry & expect 401
+
+//TODO: write test
+func TestBearerAuth(t *testing.T) {
+	cmTokenGenerator, err := cmAuth.NewTokenGenerator(&cmAuth.TokenGeneratorOptions{
+		// TODO: this cert+path needs to be configurable provisioned on Helm install
+		PrivateKeyPath: "../../test/data/bearer-test.key",
+		Audience:       "Zot Registry",
+		Issuer:         "Zot",
+		AddKIDHeader:   true,
+	})
+	if err != nil {
+		panic(err)
+	}
+
+	authTestServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/auth/token":
+			scope := r.URL.Query().Get("scope")
+			parts := strings.Split(scope, ":")
+			if len(parts) != 3 {
+				fmt.Println("Error 2:")
+				w.WriteHeader(http.StatusUnauthorized)
+				return
+			}
+			name := parts[1]
+
+			actions := []string{cmAuth.PullAction}
+			if name == UnauthorizedNamespace {
+				actions = []string{}
+			}
+			access := []cmAuth.AccessEntry{
+				{
+					Name:    name,
+					Type:    "repository",
+					Actions: actions,
+				},
+			}
+
+			token, err := cmTokenGenerator.GenerateToken(access, time.Minute*1)
+			if err != nil {
+				fmt.Println("Error 3:")
+				fmt.Println(err)
+				w.WriteHeader(http.StatusUnauthorized)
+				return
+			}
+
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprintf(w, `{"access_token": "%s"}`, token)
+		}
+	}))
+	defer authTestServer.Close()
+
+	Convey("test", t, func() {
+		//1. set up auth server
+		//  1a. Generates token from private key file using cm-Auth token generator that uses testPrivateKey file
+		//			see bundlebar auth server
+		//	1b. Just returns a token in application/json.
+		//		{ "access_token": "<jwt>" }
+		//		extract scope query param, use to determine name + action to use in []AccessEntry passed to tokenGenerator.GenerateToken()
+		//		Always returns 200 & valid JWT; sometimes JWT does not contain requested scope
+		//	1c.	actions should be empty in valid JWT token if repo is fortknox/notallowed
+		//
+		//2. Set up a Zot using Bearer Auth, referencing testPublicKey to construct controller on port 8084
+		//		(or whatever next port is not in use)
+		//
+		//3. Run tests similarly to BasicAuth tests
+		//		Check for 401 vs 200 where expected (401 for forknox/notallowed
+		//		verify code coverage
+	})
+}
 func TestBasicAuth(t *testing.T) {
 	Convey("Make a new controller", t, func() {
 		config := api.NewConfig()
