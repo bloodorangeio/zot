@@ -8,9 +8,9 @@
     "port":"8080",
     "auth": {
       "bearer": {
-        "realm": "https://staging.bundle.bar/auth/token",
-        "service": "staging.bundle.bar",
-        "cert": "test/data/bearer-test.crt"
+        "realm": "https://auth.myreg.io/auth/token",
+        "service": "myauth",
+        "cert": "/etc/zot/auth.crt"
       }
     }
   },
