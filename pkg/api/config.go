@@ -28,13 +28,13 @@ type AuthConfig struct {
 	FailDelay int
 	HTPasswd  AuthHTPasswd
 	LDAP      *LDAPConfig
-	Bearer	*BearerConfig
+	Bearer    *BearerConfig
 }
 
 type BearerConfig struct {
-	Realm string
+	Realm   string
 	Service string
-	Cert string
+	Cert    string
 }
 
 type HTTPConfig struct {
@@ -110,12 +110,6 @@ func (c *Config) Validate(log log.Logger) error {
 		l := c.HTTP.Auth.LDAP
 		if l.UserAttribute == "" {
 			log.Error().Str("userAttribute", l.UserAttribute).Msg("invalid LDAP configuration")
-			return errors.ErrLDAPConfig
-		}
-	} else if c.HTTP.Auth != nil && c.HTTP.Auth.Bearer != nil {
-		l := c.HTTP.Auth.Bearer
-		if l.Cert == "" {
-			log.Error().Str("Cert", l.Cert).Msg("invalid Cert file")
 			return errors.ErrLDAPConfig
 		}
 	}

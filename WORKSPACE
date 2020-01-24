@@ -135,6 +135,13 @@ go_repository(
 )
 
 go_repository(
+    name = "com_github_chartmuseum_auth",
+    importpath = "github.com/chartmuseum/auth",
+    sum = "h1:76rqyKtBdQAnC/YuT9ftL7OpLTDwfrfk8Ee8rD9OVOw=",
+    version = "v0.3.1",
+)
+
+go_repository(
     name = "com_github_client9_misspell",
     importpath = "github.com/client9/misspell",
     sum = "h1:ta993UF76GwbvJcIo3Y68y/M3WxlpEHPWIGDkJYwzJI=",

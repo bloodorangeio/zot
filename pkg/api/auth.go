@@ -13,18 +13,65 @@ import (
 	"time"
 
 	"github.com/anuvu/zot/errors"
+	"github.com/chartmuseum/auth"
 	"github.com/gorilla/mux"
 	"golang.org/x/crypto/bcrypt"
 )
 
-func authFail(w http.ResponseWriter, realm string, delay int) {
-	time.Sleep(time.Duration(delay) * time.Second)
-	w.Header().Set("WWW-Authenticate", realm)
-	w.Header().Set("Content-Type", "application/json")
-	WriteJSON(w, http.StatusUnauthorized, NewError(UNAUTHORIZED))
+const (
+	bearerAuthDefaultAccessEntryType = "repository"
+)
+
+func AuthHandler(c *Controller) mux.MiddlewareFunc {
+	if c.Config.HTTP.Auth != nil &&
+		c.Config.HTTP.Auth.Bearer != nil &&
+		c.Config.HTTP.Auth.Bearer.Cert != "" &&
+		c.Config.HTTP.Auth.Bearer.Realm != "" &&
+		c.Config.HTTP.Auth.Bearer.Service != "" {
+		return bearerAuthHandler(c)
+	}
+
+	return basicAuthHandler(c)
 }
 
-func BasicAuthHandler(c *Controller) mux.MiddlewareFunc {
+func bearerAuthHandler(c *Controller) mux.MiddlewareFunc {
+	authorizer, err := auth.NewAuthorizer(&auth.AuthorizerOptions{
+		Realm:           c.Config.HTTP.Auth.Bearer.Realm,
+		Service:         c.Config.HTTP.Auth.Bearer.Service,
+		PublicKeyPath:   c.Config.HTTP.Auth.Bearer.Cert,
+		AccessEntryType: bearerAuthDefaultAccessEntryType,
+	})
+	if err != nil {
+		panic(err)
+	}
+
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			vars := mux.Vars(r)
+			name := vars["name"]
+			header := r.Header.Get("Authorization")
+			action := auth.PullAction
+			if m := r.Method; m != http.MethodGet && m != http.MethodHead {
+				action = auth.PushAction
+			}
+			permissions, err := authorizer.Authorize(header, action, name)
+			if err != nil {
+				c.Log.Error().Err(err).Msg("issue parsing Authorization header")
+				w.Header().Set("Content-Type", "application/json")
+				WriteJSON(w, http.StatusInternalServerError, NewError(UNSUPPORTED))
+				return
+			}
+			if !permissions.Allowed {
+				authFail(w, permissions.WWWAuthenticateHeader, 0)
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+// nolint (gocyclo) - we use closure making this a complex subroutine
+func basicAuthHandler(c *Controller) mux.MiddlewareFunc {
 	realm := c.Config.HTTP.Realm
 	if realm == "" {
 		realm = "Authorization Required"
@@ -38,7 +85,7 @@ func BasicAuthHandler(c *Controller) mux.MiddlewareFunc {
 				if c.Config.HTTP.AllowReadAccess &&
 					c.Config.HTTP.TLS.CACert != "" &&
 					r.TLS.VerifiedChains == nil &&
-					r.Method != "GET" && r.Method != "HEAD" {
+					r.Method != http.MethodGet && r.Method != http.MethodHead {
 					authFail(w, realm, 5)
 					return
 				}
@@ -108,7 +155,7 @@ func BasicAuthHandler(c *Controller) mux.MiddlewareFunc {
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if (r.Method == "GET" || r.Method == "HEAD") && c.Config.HTTP.AllowReadAccess {
+			if (r.Method == http.MethodGet || r.Method == http.MethodHead) && c.Config.HTTP.AllowReadAccess {
 				// Process request
 				next.ServeHTTP(w, r)
 				return
@@ -167,11 +214,9 @@ func BasicAuthHandler(c *Controller) mux.MiddlewareFunc {
 	}
 }
 
-// nolint (gocyclo) - we use closure making this a complex subroutine
-//TODO: rewrite this
-func AuthHandler(c *Controller) mux.MiddlewareFunc {
-	if c.Config.HTTP.Auth != nil && c.Config.HTTP.Auth.Bearer != nil && c.Config.HTTP.Auth.Bearer.Cert != "" {
-		return BearerAuthHandler(c)
-	}
-	return BasicAuthHandler(c)
+func authFail(w http.ResponseWriter, realm string, delay int) {
+	time.Sleep(time.Duration(delay) * time.Second)
+	w.Header().Set("WWW-Authenticate", realm)
+	w.Header().Set("Content-Type", "application/json")
+	WriteJSON(w, http.StatusUnauthorized, NewError(UNAUTHORIZED))
 }
