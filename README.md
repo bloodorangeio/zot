@@ -7,7 +7,7 @@
 * Uses [OCI storage layout](https://github.com/opencontainers/image-spec/blob/master/image-layout.md) for storage layout
 * Currently suitable for on-prem deployments (e.g. colocated with Kubernetes)
 * TLS support
-* Authentication via TLS mutual authentication and HTTP *BASIC* (local _htpasswd_ and LDAP)
+* Authentication via TLS mutual authentication, HTTP *BASIC* (local _htpasswd_ and LDAP), and bearer auth
 * Doesn't require _root_ privileges
 * Swagger based documentation
 * Released under Apache 2.0 License
