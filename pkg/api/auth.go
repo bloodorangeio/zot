@@ -42,7 +42,7 @@ func bearerAuthHandler(c *Controller) mux.MiddlewareFunc {
 		AccessEntryType: bearerAuthDefaultAccessEntryType,
 	})
 	if err != nil {
-		panic(err)
+		c.Log.Panic().Err(err).Msg("error creating bearer authorizer")
 	}
 
 	return func(next http.Handler) http.Handler {

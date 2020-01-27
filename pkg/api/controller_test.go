@@ -862,7 +862,7 @@ func TestBearerAuth(t *testing.T) {
 		authorizationHeader := parseBearerAuthHeader(resp.Header().Get("Www-Authenticate"))
 		resp, err = resty.R().
 			SetQueryParam("service", authorizationHeader.Service).
-			SetQueryParam("scope", "repository:"+AuthorizedNamespace+":push,pull").
+			SetQueryParam("scope", authorizationHeader.Scope).
 			Get(authorizationHeader.Realm)
 		So(err, ShouldBeNil)
 		So(resp, ShouldNotBeNil)
@@ -875,8 +875,31 @@ func TestBearerAuth(t *testing.T) {
 			SetHeader("Authorization", fmt.Sprintf("Bearer %s", goodToken.AccessToken)).
 			Post(BaseURL3 + "/v2/" + AuthorizedNamespace + "/blobs/uploads/")
 		So(err, ShouldBeNil)
+		So(resp, ShouldNotBeNil)
 		So(resp.StatusCode(), ShouldEqual, 202)
 		loc := resp.Header().Get("Location")
+
+		resp, err = resty.R().
+			SetHeader("Content-Length", fmt.Sprintf("%d", len(blob))).
+			SetHeader("Content-Type", "application/octet-stream").
+			SetQueryParam("digest", digest).
+			SetBody(blob).
+			Put(BaseURL3 + loc)
+		So(err, ShouldBeNil)
+		So(resp, ShouldNotBeNil)
+		So(resp.StatusCode(), ShouldEqual, 401)
+
+		authorizationHeader = parseBearerAuthHeader(resp.Header().Get("Www-Authenticate"))
+		resp, err = resty.R().
+			SetQueryParam("service", authorizationHeader.Service).
+			SetQueryParam("scope", authorizationHeader.Scope).
+			Get(authorizationHeader.Realm)
+		So(err, ShouldBeNil)
+		So(resp, ShouldNotBeNil)
+		So(resp.StatusCode(), ShouldEqual, 200)
+		err = json.Unmarshal(resp.Body(), &goodToken)
+		So(err, ShouldBeNil)
+
 		resp, err = resty.R().
 			SetHeader("Content-Length", fmt.Sprintf("%d", len(blob))).
 			SetHeader("Content-Type", "application/octet-stream").
@@ -893,11 +916,36 @@ func TestBearerAuth(t *testing.T) {
 			Get(BaseURL3 + "/v2/" + AuthorizedNamespace + "/tags/list")
 		So(err, ShouldBeNil)
 		So(resp, ShouldNotBeNil)
+		So(resp.StatusCode(), ShouldEqual, 401)
+
+		authorizationHeader = parseBearerAuthHeader(resp.Header().Get("Www-Authenticate"))
+		resp, err = resty.R().
+			SetQueryParam("service", authorizationHeader.Service).
+			SetQueryParam("scope", authorizationHeader.Scope).
+			Get(authorizationHeader.Realm)
+		So(err, ShouldBeNil)
+		So(resp, ShouldNotBeNil)
+		So(resp.StatusCode(), ShouldEqual, 200)
+		err = json.Unmarshal(resp.Body(), &goodToken)
+		So(err, ShouldBeNil)
+
+		resp, err = resty.R().
+			SetHeader("Authorization", fmt.Sprintf("Bearer %s", goodToken.AccessToken)).
+			Get(BaseURL3 + "/v2/" + AuthorizedNamespace + "/tags/list")
+		So(err, ShouldBeNil)
+		So(resp, ShouldNotBeNil)
 		So(resp.StatusCode(), ShouldEqual, 200)
 
 		resp, err = resty.R().
+			Post(BaseURL3 + "/v2/" + UnauthorizedNamespace + "/blobs/uploads/")
+		So(err, ShouldBeNil)
+		So(resp, ShouldNotBeNil)
+		So(resp.StatusCode(), ShouldEqual, 401)
+
+		authorizationHeader = parseBearerAuthHeader(resp.Header().Get("Www-Authenticate"))
+		resp, err = resty.R().
 			SetQueryParam("service", authorizationHeader.Service).
-			SetQueryParam("scope", "repository:"+UnauthorizedNamespace+":push,pull").
+			SetQueryParam("scope", authorizationHeader.Scope).
 			Get(authorizationHeader.Realm)
 		So(err, ShouldBeNil)
 		So(resp, ShouldNotBeNil)
@@ -907,7 +955,7 @@ func TestBearerAuth(t *testing.T) {
 		So(err, ShouldBeNil)
 
 		resp, err = resty.R().
-			SetHeader("Authorization", fmt.Sprintf("Bearer %s", goodToken.AccessToken)).
+			SetHeader("Authorization", fmt.Sprintf("Bearer %s", badToken.AccessToken)).
 			Post(BaseURL3 + "/v2/" + UnauthorizedNamespace + "/blobs/uploads/")
 		So(err, ShouldBeNil)
 		So(resp, ShouldNotBeNil)
